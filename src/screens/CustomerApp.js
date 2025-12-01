@@ -84,10 +84,30 @@ export default function CustomerApp({
 
   // --- FORÇANDO LOJA ABERTA PARA TESTE ---
   const isOpen = true;
-  // const isOpen = !appConfig.forceClose && new Date().getHours() >= appConfig.openHour && new Date().getHours() < appConfig.closeHour;
 
   const productsTotal = cart.reduce((a, b) => a + b.price * b.qtd, 0);
 
+  // --- LÓGICA DO BOTÃO VOLTAR (SIMPLIFICADA) ---
+  useEffect(() => {
+    const handleBackButton = (event) => {
+      // Se tiver algo aberto, fecha e segura o usuário no app
+      if (selectedProduct || isCartOpen) {
+        event.preventDefault(); // Tenta prevenir a saída
+        setSelectedProduct(null);
+        setIsCartOpen(false);
+      } else if (tab !== "menu") {
+        setTab("menu");
+      }
+    };
+
+    // Adiciona um estado no histórico ao carregar para garantir que o "voltar" funcione
+    window.history.pushState(null, document.title, window.location.href);
+    window.addEventListener("popstate", handleBackButton);
+
+    return () => window.removeEventListener("popstate", handleBackButton);
+  }, [selectedProduct, isCartOpen, tab]);
+
+  // --- REGRAS DE ENTREGA ---
   useEffect(() => {
     if (usingGps && distanceKm > 0) {
       let fee = 0;
@@ -207,22 +227,6 @@ export default function CustomerApp({
     [form]
   );
 
-  // --- CONTROLE DO BOTÃO VOLTAR ---
-  useEffect(() => {
-    const handleBackButton = (event) => {
-      if (selectedProduct) setSelectedProduct(null);
-      else if (isCartOpen) setIsCartOpen(false);
-      else if (tab !== "menu") setTab("menu");
-    };
-    window.addEventListener("popstate", handleBackButton);
-    return () => window.removeEventListener("popstate", handleBackButton);
-  }, [selectedProduct, isCartOpen, tab]);
-
-  const openWithHistory = (action) => {
-    window.history.pushState(null, "", window.location.href);
-    action();
-  };
-
   const handleTabChange = (newTab) => {
     if (newTab !== tab) setTab(newTab);
   };
@@ -244,7 +248,6 @@ export default function CustomerApp({
     });
   };
 
-  // --- CORREÇÃO NO ADD TO CART ---
   const addToCart = () => {
     if (!selectedProduct) return;
     if (selectedProduct.stock !== undefined && selectedProduct.stock <= 0)
@@ -282,11 +285,10 @@ export default function CustomerApp({
       { id: Date.now(), name, details: desc.join(", "), price, qtd: 1 },
     ]);
 
-    // --- MUDANÇA AQUI: Apenas trocamos o estado visualmente ---
-    // Aproveitamos o histórico que já foi criado ao abrir o produto
+    // --- TRANSIÇÃO DIRETA (SEM TIMEOUT PARA NÃO TRAVAR) ---
     setSelectedProduct(null);
     setIsCartOpen(true);
-    // -----------------------------------------------------------
+    // -----------------------------------------------------
 
     showToast("Adicionado!");
   };
@@ -315,10 +317,7 @@ export default function CustomerApp({
     });
     setForm((prev) => ({ ...prev, points: (prev.points || 0) + pointsEarned }));
     setCart([]);
-
-    // Limpa os modais voltando o histórico
-    window.history.back();
-
+    setIsCartOpen(false);
     setTab("orders");
 
     const msg = `🍔 *PEDIDO SK* \n👤 ${form.name}\n📍 ${form.street}, ${
@@ -334,17 +333,23 @@ export default function CustomerApp({
     );
   };
 
+  // --- CARDS ---
   const ProductCard = ({ item }) => (
     <div
       key={item.id}
-      onClick={() =>
-        openWithHistory(() => {
-          setSelectedProduct(item);
-          setSelectedOptions({});
-          setIsCombo(null);
-          setObs("");
-        })
-      }
+      onClick={() => {
+        // Abre direto, sem wrapper complexo
+        setSelectedProduct(item);
+        setSelectedOptions({});
+        setIsCombo(null);
+        setObs("");
+        // Adiciona histórico manualmente
+        window.history.pushState(
+          { modal: "product" },
+          "",
+          window.location.href
+        );
+      }}
       className={`relative flex flex-col bg-zinc-900 border border-white/5 rounded-3xl overflow-hidden active:scale-[0.98] transition shadow-lg mb-6 ${
         !item.available || item.stock <= 0 ? "opacity-60 grayscale" : ""
       }`}
@@ -424,6 +429,7 @@ export default function CustomerApp({
 
   return (
     <div className="bg-zinc-950 min-h-screen pb-24 font-sans text-white selection:bg-yellow-500 selection:text-black">
+      {/* HEADER */}
       <header className="sticky top-0 bg-zinc-950/80 backdrop-blur-xl z-40 px-5 py-4 flex justify-between items-center border-b border-white/5">
         <div className="flex items-center gap-3" onClick={onBack}>
           <div
@@ -446,7 +452,14 @@ export default function CustomerApp({
           </div>
         </div>
         <button
-          onClick={() => openWithHistory(() => setIsCartOpen(true))}
+          onClick={() => {
+            setIsCartOpen(true);
+            window.history.pushState(
+              { modal: "cart" },
+              "",
+              window.location.href
+            );
+          }}
           className="relative bg-zinc-900 p-2.5 rounded-full border border-white/10 active:scale-90 transition hover:bg-zinc-800"
         >
           <ShoppingCart size={20} className="text-white" />
@@ -458,6 +471,7 @@ export default function CustomerApp({
         </button>
       </header>
 
+      {/* CONTEÚDO */}
       {tab === "menu" && (
         <>
           <div className="px-5 mt-4">
@@ -593,6 +607,7 @@ export default function CustomerApp({
         </>
       )}
 
+      {/* TELA DE PEDIDOS */}
       {tab === "orders" && (
         <div className="p-5 pt-10 animate-in fade-in">
           <h2 className="text-2xl font-black mb-6">Meus Pedidos</h2>
@@ -633,6 +648,7 @@ export default function CustomerApp({
         </div>
       )}
 
+      {/* TELA PERFIL */}
       {tab === "profile" && (
         <div className="p-5 pt-10 text-center animate-in fade-in">
           <div className="w-28 h-28 bg-gradient-to-tr from-zinc-800 to-zinc-900 rounded-full mx-auto mb-4 flex items-center justify-center text-zinc-500 border-4 border-zinc-950 shadow-2xl shadow-yellow-900/10">
@@ -663,9 +679,10 @@ export default function CustomerApp({
         </div>
       )}
 
+      {/* BOTTOM BAR */}
       <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-xl border-t border-white/5 px-8 py-4 flex justify-between items-center z-50 pb-6">
         <button
-          onClick={() => handleTabChange("menu")}
+          onClick={() => setTab("menu")}
           className={`flex flex-col items-center gap-1 transition duration-300 ${
             tab === "menu" ? "text-yellow-500 -translate-y-1" : "text-zinc-600"
           }`}
@@ -676,7 +693,7 @@ export default function CustomerApp({
           )}
         </button>
         <button
-          onClick={() => handleTabChange("orders")}
+          onClick={() => setTab("orders")}
           className={`flex flex-col items-center gap-1 relative transition duration-300 ${
             tab === "orders"
               ? "text-yellow-500 -translate-y-1"
@@ -693,7 +710,7 @@ export default function CustomerApp({
           )}
         </button>
         <button
-          onClick={() => handleTabChange("profile")}
+          onClick={() => setTab("profile")}
           className={`flex flex-col items-center gap-1 transition duration-300 ${
             tab === "profile"
               ? "text-yellow-500 -translate-y-1"
@@ -707,12 +724,208 @@ export default function CustomerApp({
         </button>
       </div>
 
+      {/* MODAL PRODUTO */}
+      {selectedProduct && (
+        <div className="fixed inset-0 z-[60] bg-black/90 flex items-end sm:items-center justify-center backdrop-blur-sm animate-in fade-in">
+          <div className="bg-zinc-950 w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] border border-white/10 overflow-hidden max-h-[90vh] flex flex-col animate-in slide-in-from-bottom-10 shadow-2xl shadow-black">
+            <div className="relative h-72 shrink-0">
+              <img
+                src={selectedProduct.image}
+                className="w-full h-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent"></div>
+              <button
+                onClick={() => {
+                  setSelectedProduct(null);
+                  window.history.back();
+                }}
+                className="absolute top-5 right-5 bg-black/40 p-2 rounded-full text-white backdrop-blur border border-white/10 active:scale-90 transition"
+              >
+                <X size={20} />
+              </button>
+              <div className="absolute bottom-6 left-6 right-6">
+                <div className="flex items-center gap-2 mb-2">
+                  <span className="bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
+                    {selectedProduct.category.split(" ")[1] || "LANCHE"}
+                  </span>
+                  <div className="flex items-center text-yellow-500 text-xs font-bold gap-1">
+                    <Star size={10} fill="currentColor" />{" "}
+                    {selectedProduct.rating}
+                  </div>
+                </div>
+                <h2 className="text-3xl font-black text-white leading-none mb-2 shadow-black drop-shadow-lg">
+                  {selectedProduct.name}
+                </h2>
+                <p className="text-sm text-zinc-300 line-clamp-3 leading-relaxed">
+                  {selectedProduct.description}
+                </p>
+              </div>
+            </div>
+
+            <div className="p-6 overflow-y-auto flex-1 space-y-8 bg-zinc-950">
+              {selectedProduct.options &&
+                selectedProduct.options.map((opt, idx) => (
+                  <div key={idx} className="space-y-3">
+                    <label className="text-xs font-black text-zinc-500 uppercase tracking-widest flex justify-between">
+                      {opt.name}
+                      {opt.required && (
+                        <span className="text-red-500 text-[10px] bg-red-500/10 px-2 rounded">
+                          OBRIGATÓRIO
+                        </span>
+                      )}
+                    </label>
+                    <div className="space-y-2">
+                      {opt.type === "radio" && (
+                        <div className="flex flex-wrap gap-2">
+                          {opt.items.map((i) => (
+                            <button
+                              key={i}
+                              onClick={() =>
+                                handleOptionChange(
+                                  opt.name,
+                                  { name: i },
+                                  "radio"
+                                )
+                              }
+                              className={`px-5 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
+                                selectedOptions[opt.name]?.[0]?.name === i
+                                  ? "bg-white text-black border-white shadow-lg shadow-white/10"
+                                  : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700"
+                              }`}
+                            >
+                              {i}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      {opt.type === "check" &&
+                        opt.items.map((i) => {
+                          const isSelected = selectedOptions[opt.name]?.find(
+                            (x) => x.name === i.name
+                          );
+                          return (
+                            <button
+                              key={i.name}
+                              onClick={() =>
+                                handleOptionChange(
+                                  opt.name,
+                                  i,
+                                  "check",
+                                  i.price
+                                )
+                              }
+                              className={`w-full flex justify-between items-center p-4 rounded-2xl border transition-all active:scale-[0.99] ${
+                                isSelected
+                                  ? "bg-green-500/10 border-green-500/50 text-white shadow-lg shadow-green-500/10"
+                                  : "bg-zinc-900 border-zinc-800 text-zinc-400"
+                              }`}
+                            >
+                              <span className="font-medium">{i.name}</span>
+                              <span
+                                className={`text-xs font-bold px-2 py-1 rounded ${
+                                  isSelected
+                                    ? "bg-green-500 text-black"
+                                    : "bg-black/30"
+                                }`}
+                              >
+                                + R$ {i.price.toFixed(2)}
+                              </span>
+                            </button>
+                          );
+                        })}
+                    </div>
+                  </div>
+                ))}
+
+              {!selectedProduct.category.includes("COMBO") &&
+                !selectedProduct.category.includes("ACOMPANHAMENTOS") &&
+                !selectedProduct.category.includes("BEBIDAS") &&
+                selectedProduct.priceCombo > 0 && (
+                  <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 p-5 rounded-2xl space-y-4">
+                    <div className="flex justify-between items-center font-bold text-yellow-500 text-sm">
+                      <span className="flex items-center gap-2">
+                        <Flame size={16} fill="currentColor" /> Virar Combo?
+                      </span>
+                      <span className="bg-yellow-500 text-black px-2 py-0.5 rounded text-[10px]">
+                        + R${" "}
+                        {(
+                          selectedProduct.priceCombo - selectedProduct.priceSolo
+                        ).toFixed(2)}
+                      </span>
+                    </div>
+                    <div className="flex gap-3">
+                      <button
+                        onClick={() => setIsCombo(true)}
+                        className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${
+                          isCombo === true
+                            ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/20"
+                            : "bg-zinc-900 hover:bg-zinc-800 border border-white/5"
+                        }`}
+                      >
+                        SIM, QUERO
+                      </button>
+                      <button
+                        onClick={() => setIsCombo(false)}
+                        className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${
+                          isCombo === false
+                            ? "bg-white text-black"
+                            : "bg-zinc-900 hover:bg-zinc-800 border border-white/5"
+                        }`}
+                      >
+                        NÃO, OBRIGADO
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+              <div className="space-y-2">
+                <label className="text-xs font-black text-zinc-500 uppercase tracking-widest">
+                  Observações
+                </label>
+                <textarea
+                  placeholder="Ex: Sem cebola, capricha no molho..."
+                  className="w-full bg-zinc-950 p-4 rounded-2xl text-sm text-white border border-zinc-800 focus:border-yellow-500/50 outline-none transition resize-none h-24"
+                  value={obs}
+                  onChange={(e) => setObs(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="p-6 border-t border-white/5 bg-zinc-950 pb-8">
+              <button
+                onClick={addToCart}
+                style={themeStyle}
+                className="w-full text-black py-4 rounded-2xl font-black text-lg flex justify-between px-8 hover:brightness-110 shadow-xl shadow-yellow-500/20 active:scale-95 transition-all transform"
+              >
+                <span>ADICIONAR</span>
+                <span>
+                  R${" "}
+                  {(
+                    parseFloat(selectedProduct.priceSolo) +
+                    (isCombo
+                      ? selectedProduct.priceCombo - selectedProduct.priceSolo
+                      : 0) +
+                    Object.values(selectedOptions)
+                      .flat()
+                      .reduce((a, b) => a + (b.price || 0), 0)
+                  ).toFixed(2)}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL CARRINHO */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-in slide-in-from-bottom-10 backdrop-blur-xl">
           <div className="flex justify-between items-center p-6 border-b border-white/5 bg-zinc-950">
             <h2 className="font-black text-2xl tracking-tight">Seu Pedido</h2>
             <button
-              onClick={() => window.history.back()}
+              onClick={() => {
+                setIsCartOpen(false);
+                window.history.back();
+              }}
               className="bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition"
             >
               <X size={20} />

@@ -401,7 +401,7 @@ export default function App() {
         style={themeStyle}
         className="text-black text-[10px] font-bold text-center py-1 z-[60] shadow-lg"
       >
-        SK SYSTEM V12.5 • FINAL
+        SK SYSTEM V12.6 • FINAL
       </div>
       <div className="fixed top-10 right-0 left-0 flex flex-col items-center pointer-events-none z-[70]">
         {toasts.map((t) => (
@@ -428,7 +428,7 @@ export default function App() {
         {view === "login" && (
           <LoginScreen
             setView={setView}
-            setCurrentUser={setCurrentUser} // <--- AQUI ESTÁ A CORREÇÃO!
+            setCurrentUser={setCurrentUser} // <--- ESTA LINHA É A QUE CORRIGE TUDO!
             appConfig={appConfig}
             motoboys={motoboys}
             themeStyle={themeStyle}

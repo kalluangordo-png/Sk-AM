@@ -22,21 +22,23 @@ export default function LoginScreen({
 
   // --- SENHAS ---
   const SENHA_ADMIN = "sk2024";
-  const SENHA_COZINHA = "1234"; // <--- NOVA SENHA DA COZINHA
+  const SENHA_COZINHA = "1234";
 
-  const config = appConfig || {
-    openHour: 18,
-    closeHour: 23,
-    forceClose: false,
-    storeName: "SK BURGERS",
+  const config = {
+    ...appConfig,
+    storeName: "SK BURGERS", // Nome interno
+    openHour: appConfig?.openHour || 18,
+    closeHour: appConfig?.closeHour || 23,
+    forceClose: appConfig?.forceClose || false,
   };
+
   const currentHour = new Date().getHours();
   const isOpen =
     !config.forceClose &&
     currentHour >= config.openHour &&
     currentHour < config.closeHour;
 
-  // Monitora o campo de login para mostrar a senha se for "admin" ou "cozinha"
+  // Monitora o campo de login
   useEffect(() => {
     const term = login.trim().toLowerCase();
     if (term === "admin" || term === "cozinha") {
@@ -50,7 +52,6 @@ export default function LoginScreen({
   const handleLogin = () => {
     const term = login.trim().toLowerCase();
 
-    // 1. Login Admin
     if (term === "admin") {
       if (password === SENHA_ADMIN) {
         setCurrentUser({ name: "Dono", role: "admin" });
@@ -61,7 +62,6 @@ export default function LoginScreen({
       return;
     }
 
-    // 2. Login Cozinha (Agora com senha)
     if (term === "cozinha") {
       if (password === SENHA_COZINHA) {
         setCurrentUser({ name: "Cozinha", role: "kitchen" });
@@ -72,17 +72,14 @@ export default function LoginScreen({
       return;
     }
 
-    // 3. Login Motoboy (Sem senha, direto)
     performUserLogin(term);
   };
 
   const handleQuickLogin = (term) => {
     setLogin(term);
-    // Se for cozinha, NÃO entra direto, apenas preenche para pedir senha
     if (term === "cozinha") {
       return;
     }
-    // Se for motoboy, tenta entrar direto
     performUserLogin(term);
   };
 
@@ -97,34 +94,34 @@ export default function LoginScreen({
   };
 
   return (
-    <div className="min-h-screen bg-black flex flex-col items-center justify-center relative overflow-hidden font-sans text-white">
-      {/* 1. IMAGEM DE FUNDO COM EFEITO ESCURO */}
+    <div className="min-h-full bg-black flex flex-col items-center justify-center relative overflow-hidden font-sans text-white h-full">
+      {/* 1. IMAGEM DE FUNDO */}
       <div className="absolute inset-0 z-0">
         <img
           src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1080&fit=max"
           alt="Background Burger"
-          className="w-full h-full object-cover opacity-50"
+          className="w-full h-full object-cover opacity-60"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/40"></div>
       </div>
 
       {/* 2. CONTEÚDO PRINCIPAL */}
       <div className="relative z-10 w-full max-w-sm p-6 flex flex-col items-center">
-        {/* LOGO */}
+        {/* LOGO: SK (Texto) + BURGERS (Texto) - SEM ÍCONES */}
         <div className="mb-10 flex flex-col items-center animate-in slide-in-from-top-10 duration-1000">
-          <div className="w-32 h-32 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(234,179,8,0.5)] border-4 border-black mb-4 relative">
-            <div className="absolute inset-0 bg-white opacity-20 rounded-full animate-pulse"></div>
-            <span className="font-black text-7xl text-black tracking-tighter mt-1 relative z-10">
+          <div className="w-28 h-28 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(234,179,8,0.6)] border-4 border-black mb-4 relative">
+            {/* AQUI ESTÁ A MUDANÇA: VOLTA O TEXTO "SK" */}
+            <span className="font-black text-6xl text-black tracking-tighter mt-1">
               SK
             </span>
           </div>
           <h1
-            className="text-5xl font-black text-white tracking-widest drop-shadow-2xl"
+            className="text-6xl font-black text-white tracking-tighter drop-shadow-2xl uppercase"
             style={{ textShadow: "0 4px 10px rgba(0,0,0,0.8)" }}
           >
             BURGERS
           </h1>
-          <div className="h-1.5 w-24 bg-yellow-500 rounded-full mt-3 shadow-[0_0_15px_rgba(234,179,8,0.8)]"></div>
+          <div className="h-1 w-32 bg-yellow-500 rounded-full mt-2 shadow-[0_0_15px_rgba(234,179,8,0.8)]"></div>
         </div>
 
         {/* STATUS DA LOJA */}
@@ -160,7 +157,7 @@ export default function LoginScreen({
         </button>
 
         {/* ÁREA DA EQUIPE */}
-        <div className="w-full bg-zinc-900/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 animate-in slide-in-from-bottom-10 duration-1000 delay-200">
+        <div className="w-full bg-zinc-900/60 backdrop-blur-xl border border-white/10 rounded-3xl p-6 animate-in slide-in-from-bottom-10 duration-1000 delay-200">
           <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mb-4 text-center border-b border-white/5 pb-2">
             Área Restrita da Equipe
           </p>
@@ -229,7 +226,7 @@ export default function LoginScreen({
       </div>
 
       <p className="absolute bottom-4 text-[10px] text-zinc-600 font-bold opacity-50">
-        SK SYSTEM v12.4 Premium
+        SYSTEM V12.9
       </p>
     </div>
   );

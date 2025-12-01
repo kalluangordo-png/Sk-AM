@@ -11,7 +11,18 @@ import {
   Receipt,
   CheckCircle,
   History,
+  CheckSquare,
+  Square,
+  Search,
 } from "lucide-react";
+
+// --- LISTA DE ADICIONAIS ---
+const EXTRAS_OPTIONS = [
+  { name: "Batata Frita Individual (150g)", price: 10.0 },
+  { name: "Batata SK (Cheddar e Bacon - 300g)", price: 18.0 },
+  { name: "Adicional de Smash (Carne 70g + Queijo)", price: 6.0 },
+  { name: "Pote Extra de Maionese Verde (30ml)", price: 2.0 },
+];
 
 export default function CustomerApp({
   onBack,
@@ -27,7 +38,11 @@ export default function CustomerApp({
 }) {
   const [view, setView] = useState("menu");
   const [cart, setCart] = useState([]);
+
+  // Estado do Modal
   const [selectedItem, setSelectedItem] = useState(null);
+  const [selectedExtras, setSelectedExtras] = useState([]); // Novos adicionais selecionados
+
   const [activeCategory, setActiveCategory] = useState(categories[0]);
 
   // --- ESTADOS DO FORMULÁRIO DE CHECKOUT ---
@@ -61,25 +76,54 @@ export default function CustomerApp({
   // --- FUNÇÕES DO CARRINHO ---
   const openItemModal = (item) => {
     setSelectedItem({ ...item, qtd: 1, obs: "", type: "solo" });
+    setSelectedExtras([]); // Limpa adicionais ao abrir
+  };
+
+  const toggleExtra = (extra) => {
+    if (selectedExtras.find((e) => e.name === extra.name)) {
+      setSelectedExtras(selectedExtras.filter((e) => e.name !== extra.name));
+    } else {
+      setSelectedExtras([...selectedExtras, extra]);
+    }
   };
 
   const addToCart = () => {
     if (!selectedItem) return;
 
-    const finalPrice =
+    // Preço base (Solo ou Combo)
+    const basePrice =
       selectedItem.type === "combo"
         ? selectedItem.priceCombo
         : selectedItem.priceSolo;
 
-    const finalName =
+    // Soma o preço dos adicionais
+    const extrasPrice = selectedExtras.reduce((acc, ex) => acc + ex.price, 0);
+
+    // Preço Final da Unidade
+    const unitPrice = basePrice + extrasPrice;
+
+    // Monta o nome com os adicionais para aparecer na cozinha
+    let finalName =
       selectedItem.type === "combo"
         ? `COMBO ${selectedItem.name}`
         : selectedItem.name;
 
+    // Adiciona os extras ao nome ou observação para a cozinha ver
+    const extrasString = selectedExtras.map((e) => `+ ${e.name}`).join(", ");
+
+    // Se tiver extras, junta na observação do item
+    let finalObs = selectedItem.obs;
+    if (extrasString) {
+      finalObs = finalObs
+        ? `${finalObs} | EXTRAS: ${extrasString}`
+        : `EXTRAS: ${extrasString}`;
+    }
+
     const newItem = {
       ...selectedItem,
       name: finalName,
-      price: finalPrice,
+      price: unitPrice, // O preço salvo já inclui os extras
+      obs: finalObs, // Observação atualizada com os extras
       id: Date.now(),
     };
 
@@ -126,27 +170,36 @@ export default function CustomerApp({
   const renderModal = () => {
     if (!selectedItem) return null;
     const isCombo = selectedItem.type === "combo";
-    const currentPrice = isCombo
+    const basePrice = isCombo
       ? selectedItem.priceCombo
       : selectedItem.priceSolo;
+    const extrasTotal = selectedExtras.reduce((acc, ex) => acc + ex.price, 0);
+    const finalUnitPrice = basePrice + extrasTotal;
 
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
-        <div className="bg-zinc-900 w-full max-w-sm rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative">
+        <div className="bg-zinc-900 w-full max-w-md rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative flex flex-col max-h-[90vh]">
+          {/* Botão Fechar */}
           <button
             onClick={() => setSelectedItem(null)}
-            className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white z-10"
+            className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white z-20"
           >
             <X size={20} />
           </button>
 
-          <img
-            src={selectedItem.image}
-            className="w-full h-48 object-cover"
-            alt={selectedItem.name}
-          />
+          {/* Imagem (Fica fixa no topo) */}
+          <div className="shrink-0 h-48 w-full relative">
+            <img
+              src={selectedItem.image}
+              className="w-full h-full object-cover"
+              alt={selectedItem.name}
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent"></div>
+          </div>
 
-          <div className="p-5 space-y-4">
+          {/* Conteúdo com Scroll */}
+          <div className="p-5 overflow-y-auto space-y-5 scrollbar-hide">
+            {/* Título e Descrição */}
             <div>
               <h3 className="text-2xl font-black text-white leading-none">
                 {selectedItem.name}
@@ -156,14 +209,17 @@ export default function CustomerApp({
               </p>
             </div>
 
+            {/* Seleção Combo/Solo */}
             {selectedItem.priceCombo > 0 && (
-              <div className="bg-black p-1 rounded-xl flex">
+              <div className="bg-black p-1 rounded-xl flex shrink-0">
                 <button
                   onClick={() =>
                     setSelectedItem({ ...selectedItem, type: "solo" })
                   }
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
-                    !isCombo ? "bg-zinc-800 text-white" : "text-zinc-500"
+                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition ${
+                    !isCombo
+                      ? "bg-zinc-800 text-white shadow"
+                      : "text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
                   SÓ O LANCHE (R$ {selectedItem.priceSolo.toFixed(2)})
@@ -172,8 +228,10 @@ export default function CustomerApp({
                   onClick={() =>
                     setSelectedItem({ ...selectedItem, type: "combo" })
                   }
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
-                    isCombo ? "bg-yellow-500 text-black" : "text-zinc-500"
+                  className={`flex-1 py-2.5 rounded-lg text-xs font-bold transition ${
+                    isCombo
+                      ? "bg-yellow-500 text-black shadow"
+                      : "text-zinc-500 hover:text-zinc-300"
                   }`}
                 >
                   COMBO (R$ {selectedItem.priceCombo.toFixed(2)})
@@ -181,23 +239,69 @@ export default function CustomerApp({
               </div>
             )}
 
+            {/* --- SEÇÃO DE ADICIONAIS (NOVA) --- */}
+            <div className="bg-zinc-800/50 p-3 rounded-xl border border-white/5">
+              <h4 className="text-yellow-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+                <Plus size={12} /> Turbinar seu pedido?
+              </h4>
+              <div className="space-y-2">
+                {EXTRAS_OPTIONS.map((extra, idx) => {
+                  const isSelected = selectedExtras.some(
+                    (e) => e.name === extra.name
+                  );
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => toggleExtra(extra)}
+                      className={`w-full flex items-center justify-between p-3 rounded-lg border transition text-left ${
+                        isSelected
+                          ? "bg-green-500/10 border-green-500/50"
+                          : "bg-black/40 border-white/5 hover:bg-black/60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        {isSelected ? (
+                          <CheckSquare size={18} className="text-green-500" />
+                        ) : (
+                          <Square size={18} className="text-zinc-600" />
+                        )}
+                        <span
+                          className={`text-xs font-bold ${
+                            isSelected ? "text-white" : "text-zinc-400"
+                          }`}
+                        >
+                          {extra.name}
+                        </span>
+                      </div>
+                      <span className="text-xs font-bold text-yellow-500">
+                        + R$ {extra.price.toFixed(2)}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Observações */}
             <div>
-              <label className="text-xs font-bold text-zinc-500 uppercase">
-                Alguma observação?
+              <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
+                Observações do Lanche
               </label>
               <textarea
-                className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm mt-1 outline-none focus:border-yellow-500"
-                rows="2"
-                placeholder="Ex: Sem cebola, capricha no molho..."
+                className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm mt-1 outline-none focus:border-yellow-500 transition h-20 resize-none"
+                placeholder="Ex: Sem cebola, ponto da carne..."
                 value={selectedItem.obs}
                 onChange={(e) =>
                   setSelectedItem({ ...selectedItem, obs: e.target.value })
                 }
               />
             </div>
+          </div>
 
-            <div className="flex items-center gap-4 pt-2">
-              <div className="flex items-center bg-black rounded-xl border border-white/10">
+          {/* Footer Fixo: Quantidade e Botão Adicionar */}
+          <div className="p-4 bg-zinc-900 border-t border-white/5 mt-auto">
+            <div className="flex items-center gap-4">
+              <div className="flex items-center bg-black rounded-xl border border-white/10 h-12">
                 <button
                   onClick={() =>
                     setSelectedItem((prev) => ({
@@ -205,11 +309,11 @@ export default function CustomerApp({
                       qtd: Math.max(1, prev.qtd - 1),
                     }))
                   }
-                  className="p-3 text-zinc-400 hover:text-white"
+                  className="px-4 h-full text-zinc-400 hover:text-white transition"
                 >
                   <Minus size={18} />
                 </button>
-                <span className="font-black text-white w-8 text-center">
+                <span className="font-black text-white w-6 text-center">
                   {selectedItem.qtd}
                 </span>
                 <button
@@ -219,7 +323,7 @@ export default function CustomerApp({
                       qtd: prev.qtd + 1,
                     }))
                   }
-                  className="p-3 text-zinc-400 hover:text-white"
+                  className="px-4 h-full text-zinc-400 hover:text-white transition"
                 >
                   <Plus size={18} />
                 </button>
@@ -227,10 +331,10 @@ export default function CustomerApp({
 
               <button
                 onClick={addToCart}
-                className="flex-1 bg-green-600 hover:bg-green-500 text-white font-black py-3.5 rounded-xl flex justify-between px-6 items-center shadow-lg active:scale-95 transition"
+                className="flex-1 h-12 bg-green-600 hover:bg-green-500 text-white font-black rounded-xl flex justify-between px-4 items-center shadow-lg active:scale-95 transition"
               >
                 <span>ADICIONAR</span>
-                <span>R$ {(currentPrice * selectedItem.qtd).toFixed(2)}</span>
+                <span>R$ {(finalUnitPrice * selectedItem.qtd).toFixed(2)}</span>
               </button>
             </div>
           </div>
@@ -294,6 +398,11 @@ export default function CustomerApp({
                     <div key={idx} className="text-sm text-zinc-300">
                       <span className="font-bold text-white">{i.qtd}x</span>{" "}
                       {i.name}
+                      {i.details && (
+                        <div className="text-xs text-zinc-500 pl-4 border-l border-zinc-700 mt-1">
+                          {i.details}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -466,8 +575,8 @@ export default function CustomerApp({
                       {item.name}
                     </h4>
                     {item.obs && (
-                      <p className="text-zinc-500 text-xs mt-1">
-                        Obs: "{item.obs}"
+                      <p className="text-zinc-500 text-xs mt-1 max-w-[200px] leading-relaxed">
+                        {item.obs}
                       </p>
                     )}
                     <p className="text-yellow-500 font-bold text-xs mt-2">
@@ -509,8 +618,7 @@ export default function CustomerApp({
     <div className="min-h-screen bg-zinc-950 pb-24 text-white font-sans relative">
       {renderModal()}
 
-      {/* HEADER STICKY (GRUDENTO) - AQUI ESTÁ A CORREÇÃO! */}
-      {/* Mudamos de 'fixed' para 'sticky'. Agora ele respeita a largura do container */}
+      {/* HEADER STICKY */}
       <div className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-white/5 pb-2">
         <div className="p-4 flex justify-between items-center">
           <div>
@@ -559,7 +667,6 @@ export default function CustomerApp({
       </div>
 
       {/* LISTA DE PRODUTOS */}
-      {/* Removido o 'pt-32' exagerado, agora usamos 'pt-4' pois o header é sticky e empurra o conteúdo */}
       <div className="pt-4 px-4 pb-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-max">
         {filteredMenu.map((item) => (
           <div
@@ -601,7 +708,6 @@ export default function CustomerApp({
       {/* BOTÃO FLUTUANTE DO CARRINHO */}
       {cart.length > 0 && (
         <div className="fixed bottom-6 left-6 right-6 z-50 animate-in slide-in-from-bottom-4 pointer-events-none flex justify-center">
-          {/* Adicionei um wrapper para limitar a largura no PC também */}
           <button
             onClick={() => setView("cart")}
             className="w-full max-w-[400px] bg-green-600 text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center font-bold hover:bg-green-500 transition pointer-events-auto"

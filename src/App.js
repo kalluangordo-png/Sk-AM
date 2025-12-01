@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Bell } from "lucide-react";
+import { Bell, Loader2 } from "lucide-react";
 
-// --- 1. IMPORTS CORRIGIDOS (Sem o "/src") ---
+// --- IMPORTANDO CONFIGURAÇÕES ---
 import {
   db,
   auth,
@@ -13,6 +13,7 @@ import {
   INITIAL_COUPONS,
 } from "./config/firebase";
 
+// --- IMPORTANDO TELAS ---
 import LoginScreen from "./screens/LoginScreen";
 import CustomerApp from "./screens/CustomerApp";
 import AdminDashboard from "./screens/AdminDashboard";
@@ -40,6 +41,7 @@ export default function App() {
   const [toasts, setToasts] = useState([]);
   const [isOnline, setIsOnline] = useState(false);
   const [userAuth, setUserAuth] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   // --- ESTADOS GLOBAIS ---
   const [orders, setOrders] = useState([]);
@@ -49,7 +51,6 @@ export default function App() {
   const [motoboys, setMotoboys] = useState(INITIAL_MOTOBOYS);
   const [coupons, setCoupons] = useState(INITIAL_COUPONS);
 
-  // Histórico local de pedidos do cliente
   const [myOrderIds, setMyOrderIds] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("sk_my_order_ids_v3")) || [];
@@ -58,17 +59,30 @@ export default function App() {
     }
   });
 
+  // --- ORDENAÇÃO GLOBAL ---
+  const sortedMenuItems = useMemo(() => {
+    return [...menuItems].sort((a, b) => (a.order || 0) - (b.order || 0));
+  }, [menuItems]);
+
   // --- AUTENTICAÇÃO ---
   useEffect(() => {
-    if (!auth) return;
-    signInAnonymously(auth).catch(console.error);
-    onAuthStateChanged(auth, (user) => {
+    if (!auth) {
+      setIsLoading(false);
+      return;
+    }
+    signInAnonymously(auth).catch((err) => {
+      console.error(err);
+      setIsLoading(false);
+    });
+    const unsubAuth = onAuthStateChanged(auth, (user) => {
       setUserAuth(user);
       setIsOnline(!!user);
+      setTimeout(() => setIsLoading(false), 1500);
     });
+    return () => unsubAuth();
   }, []);
 
-  // --- SINCRONIZAÇÃO DE DADOS ---
+  // --- SINCRONIZAÇÃO ---
   useEffect(() => {
     if (!db || !userAuth) {
       const localMenu = localStorage.getItem("sk_menu_v11");
@@ -206,7 +220,6 @@ export default function App() {
     if (updates.config) setAppConfig(updates.config);
     if (updates.motoboys) setMotoboys(updates.motoboys);
     if (updates.coupons) setCoupons(updates.coupons);
-
     if (db && isOnline) {
       await setDoc(
         doc(
@@ -337,7 +350,7 @@ export default function App() {
       updateOrder,
       deleteOrder,
       showToast,
-      menuItems,
+      menuItems: sortedMenuItems,
       addMenuItem: (i) => safeDbOp("menu", i),
       updateMenuItem: (id, u) => safeDbOp("menu", u, "update", id),
       deleteMenuItem: (id) => safeDbOp("menu", null, "delete", id),
@@ -357,11 +370,30 @@ export default function App() {
         "BEBIDAS",
       ],
     }),
-    [orders, menuItems, bairros, appConfig, motoboys, coupons, myOrderIds]
+    [orders, sortedMenuItems, bairros, appConfig, motoboys, coupons, myOrderIds]
   );
 
   const themeStyle = { backgroundColor: appConfig.themeColor || "#EAB308" };
   const textThemeStyle = { color: appConfig.themeColor || "#EAB308" };
+
+  if (isLoading) {
+    return (
+      <div className="bg-zinc-950 min-h-screen flex flex-col items-center justify-center p-4">
+        <div className="relative mb-6">
+          <div className="absolute inset-0 bg-yellow-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
+          <div className="w-24 h-24 rounded-full bg-zinc-900 border-4 border-zinc-800 flex items-center justify-center relative z-10 shadow-2xl">
+            <span className="font-black text-4xl text-white">SK</span>
+          </div>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <Loader2 className="text-yellow-500 animate-spin" size={32} />
+          <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest animate-pulse">
+            Carregando Sistema...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-zinc-950 text-white min-h-screen font-sans relative overflow-hidden flex flex-col">
@@ -369,9 +401,8 @@ export default function App() {
         style={themeStyle}
         className="text-black text-[10px] font-bold text-center py-1 z-[60] shadow-lg"
       >
-        SK SYSTEM V12.0 • MODULAR PRO
+        SK SYSTEM V12.5 • FINAL
       </div>
-
       <div className="fixed top-10 right-0 left-0 flex flex-col items-center pointer-events-none z-[70]">
         {toasts.map((t) => (
           <div
@@ -397,7 +428,7 @@ export default function App() {
         {view === "login" && (
           <LoginScreen
             setView={setView}
-            setCurrentUser={setCurrentUser}
+            setCurrentUser={setCurrentUser} // <--- AQUI ESTÁ A CORREÇÃO!
             appConfig={appConfig}
             motoboys={motoboys}
             themeStyle={themeStyle}

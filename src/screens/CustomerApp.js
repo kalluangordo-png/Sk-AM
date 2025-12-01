@@ -87,23 +87,19 @@ export default function CustomerApp({
 
   const productsTotal = cart.reduce((a, b) => a + b.price * b.qtd, 0);
 
-  // --- LÓGICA DO BOTÃO VOLTAR (SIMPLIFICADA) ---
+  // --- LÓGICA DO BOTÃO VOLTAR ---
   useEffect(() => {
     const handleBackButton = (event) => {
-      // Se tiver algo aberto, fecha e segura o usuário no app
       if (selectedProduct || isCartOpen) {
-        event.preventDefault(); // Tenta prevenir a saída
+        event.preventDefault();
         setSelectedProduct(null);
         setIsCartOpen(false);
       } else if (tab !== "menu") {
         setTab("menu");
       }
     };
-
-    // Adiciona um estado no histórico ao carregar para garantir que o "voltar" funcione
     window.history.pushState(null, document.title, window.location.href);
     window.addEventListener("popstate", handleBackButton);
-
     return () => window.removeEventListener("popstate", handleBackButton);
   }, [selectedProduct, isCartOpen, tab]);
 
@@ -333,17 +329,14 @@ export default function CustomerApp({
     );
   };
 
-  // --- CARDS ---
   const ProductCard = ({ item }) => (
     <div
       key={item.id}
       onClick={() => {
-        // Abre direto, sem wrapper complexo
         setSelectedProduct(item);
         setSelectedOptions({});
         setIsCombo(null);
         setObs("");
-        // Adiciona histórico manualmente
         window.history.pushState(
           { modal: "product" },
           "",
@@ -434,21 +427,35 @@ export default function CustomerApp({
         <div className="flex items-center gap-3" onClick={onBack}>
           <div
             style={themeStyle}
-            className="w-10 h-10 rounded-full flex items-center justify-center font-black text-black text-xs shadow-lg shadow-yellow-500/20"
+            className="w-12 h-12 rounded-full flex items-center justify-center font-black text-black text-sm shadow-lg shadow-yellow-500/20 border-2 border-yellow-500/50"
           >
             SK
           </div>
           <div>
-            <h1 className="font-bold text-sm leading-none tracking-wide text-white">
+            <h1 className="font-black text-xl leading-none tracking-wide text-white uppercase">
               {appConfig.storeName}
             </h1>
-            <p
-              className={`text-[10px] font-bold ${
-                isOpen ? "text-green-500" : "text-red-500"
-              }`}
-            >
-              {isOpen ? "ABERTO" : "FECHADO"}
-            </p>
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className={`relative flex h-2 w-2`}>
+                <span
+                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                    isOpen ? "bg-green-400" : "bg-red-400"
+                  }`}
+                ></span>
+                <span
+                  className={`relative inline-flex rounded-full h-2 w-2 ${
+                    isOpen ? "bg-green-500" : "bg-red-500"
+                  }`}
+                ></span>
+              </span>
+              <p
+                className={`text-[10px] font-bold tracking-wider ${
+                  isOpen ? "text-green-500" : "text-red-500"
+                }`}
+              >
+                {isOpen ? "ABERTO AGORA" : "FECHADO"}
+              </p>
+            </div>
           </div>
         </div>
         <button
@@ -460,9 +467,9 @@ export default function CustomerApp({
               window.location.href
             );
           }}
-          className="relative bg-zinc-900 p-2.5 rounded-full border border-white/10 active:scale-90 transition hover:bg-zinc-800"
+          className="relative bg-zinc-900 p-3 rounded-full border border-white/10 active:scale-90 transition hover:bg-zinc-800"
         >
-          <ShoppingCart size={20} className="text-white" />
+          <ShoppingCart size={22} className="text-white" />
           {cart.length > 0 && (
             <span className="absolute -top-1 -right-1 bg-red-600 text-[10px] min-w-[1.25rem] h-5 px-1 rounded-full flex items-center justify-center font-bold border-2 border-zinc-950 shadow-sm animate-bounce">
               {cart.length}
@@ -572,11 +579,11 @@ export default function CustomerApp({
                 if (itemsInCat.length === 0) return null;
                 return (
                   <div key={cat} className="animate-in slide-in-from-bottom-4">
-                    <div className="flex items-center gap-3 mb-4 mt-2">
+                    <div className="flex items-center gap-3 mb-4 mt-4 border-b border-white/10 pb-2">
+                      <div className="h-6 w-1 bg-yellow-500 rounded-full"></div>
                       <h3 className="font-black text-lg text-white tracking-tight uppercase italic">
                         {cat}
                       </h3>
-                      <div className="h-[1px] flex-1 bg-gradient-to-r from-white/20 to-transparent"></div>
                     </div>
                     <div>
                       {itemsInCat.map((item) => (
@@ -589,7 +596,7 @@ export default function CustomerApp({
             ) : (
               <div className="animate-in slide-in-from-bottom-4">
                 {activeCategory !== "TODOS" && (
-                  <h2 className="font-bold text-lg mb-4 flex items-center gap-2 text-yellow-500">
+                  <h2 className="font-bold text-lg mb-4 flex items-center gap-2 text-yellow-500 mt-4">
                     <Flame size={18} /> {activeCategory}
                   </h2>
                 )}
@@ -627,7 +634,7 @@ export default function CustomerApp({
               {myActiveOrders.map((o) => (
                 <div
                   key={o.id}
-                  className="bg-zinc-900 border border-white/5 p-5 rounded-2xl shadow-lg"
+                  className="bg-zinc-900 border border-white/10 p-5 rounded-2xl shadow-lg"
                 >
                   <div className="flex justify-between mb-3 border-b border-white/5 pb-2">
                     <span className="font-bold text-zinc-400">
@@ -682,7 +689,7 @@ export default function CustomerApp({
       {/* BOTTOM BAR */}
       <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-xl border-t border-white/5 px-8 py-4 flex justify-between items-center z-50 pb-6">
         <button
-          onClick={() => setTab("menu")}
+          onClick={() => handleTabChange("menu")}
           className={`flex flex-col items-center gap-1 transition duration-300 ${
             tab === "menu" ? "text-yellow-500 -translate-y-1" : "text-zinc-600"
           }`}
@@ -693,7 +700,7 @@ export default function CustomerApp({
           )}
         </button>
         <button
-          onClick={() => setTab("orders")}
+          onClick={() => handleTabChange("orders")}
           className={`flex flex-col items-center gap-1 relative transition duration-300 ${
             tab === "orders"
               ? "text-yellow-500 -translate-y-1"
@@ -710,7 +717,7 @@ export default function CustomerApp({
           )}
         </button>
         <button
-          onClick={() => setTab("profile")}
+          onClick={() => handleTabChange("profile")}
           className={`flex flex-col items-center gap-1 transition duration-300 ${
             tab === "profile"
               ? "text-yellow-500 -translate-y-1"
@@ -724,208 +731,13 @@ export default function CustomerApp({
         </button>
       </div>
 
-      {/* MODAL PRODUTO */}
-      {selectedProduct && (
-        <div className="fixed inset-0 z-[60] bg-black/90 flex items-end sm:items-center justify-center backdrop-blur-sm animate-in fade-in">
-          <div className="bg-zinc-950 w-full max-w-md rounded-t-[2.5rem] sm:rounded-[2.5rem] border border-white/10 overflow-hidden max-h-[90vh] flex flex-col animate-in slide-in-from-bottom-10 shadow-2xl shadow-black">
-            <div className="relative h-72 shrink-0">
-              <img
-                src={selectedProduct.image}
-                className="w-full h-full object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-zinc-950 via-transparent to-transparent"></div>
-              <button
-                onClick={() => {
-                  setSelectedProduct(null);
-                  window.history.back();
-                }}
-                className="absolute top-5 right-5 bg-black/40 p-2 rounded-full text-white backdrop-blur border border-white/10 active:scale-90 transition"
-              >
-                <X size={20} />
-              </button>
-              <div className="absolute bottom-6 left-6 right-6">
-                <div className="flex items-center gap-2 mb-2">
-                  <span className="bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded-full uppercase tracking-wider">
-                    {selectedProduct.category.split(" ")[1] || "LANCHE"}
-                  </span>
-                  <div className="flex items-center text-yellow-500 text-xs font-bold gap-1">
-                    <Star size={10} fill="currentColor" />{" "}
-                    {selectedProduct.rating}
-                  </div>
-                </div>
-                <h2 className="text-3xl font-black text-white leading-none mb-2 shadow-black drop-shadow-lg">
-                  {selectedProduct.name}
-                </h2>
-                <p className="text-sm text-zinc-300 line-clamp-3 leading-relaxed">
-                  {selectedProduct.description}
-                </p>
-              </div>
-            </div>
-
-            <div className="p-6 overflow-y-auto flex-1 space-y-8 bg-zinc-950">
-              {selectedProduct.options &&
-                selectedProduct.options.map((opt, idx) => (
-                  <div key={idx} className="space-y-3">
-                    <label className="text-xs font-black text-zinc-500 uppercase tracking-widest flex justify-between">
-                      {opt.name}
-                      {opt.required && (
-                        <span className="text-red-500 text-[10px] bg-red-500/10 px-2 rounded">
-                          OBRIGATÓRIO
-                        </span>
-                      )}
-                    </label>
-                    <div className="space-y-2">
-                      {opt.type === "radio" && (
-                        <div className="flex flex-wrap gap-2">
-                          {opt.items.map((i) => (
-                            <button
-                              key={i}
-                              onClick={() =>
-                                handleOptionChange(
-                                  opt.name,
-                                  { name: i },
-                                  "radio"
-                                )
-                              }
-                              className={`px-5 py-2.5 rounded-xl text-xs font-bold border-2 transition-all ${
-                                selectedOptions[opt.name]?.[0]?.name === i
-                                  ? "bg-white text-black border-white shadow-lg shadow-white/10"
-                                  : "bg-zinc-900 text-zinc-400 border-zinc-800 hover:border-zinc-700"
-                              }`}
-                            >
-                              {i}
-                            </button>
-                          ))}
-                        </div>
-                      )}
-                      {opt.type === "check" &&
-                        opt.items.map((i) => {
-                          const isSelected = selectedOptions[opt.name]?.find(
-                            (x) => x.name === i.name
-                          );
-                          return (
-                            <button
-                              key={i.name}
-                              onClick={() =>
-                                handleOptionChange(
-                                  opt.name,
-                                  i,
-                                  "check",
-                                  i.price
-                                )
-                              }
-                              className={`w-full flex justify-between items-center p-4 rounded-2xl border transition-all active:scale-[0.99] ${
-                                isSelected
-                                  ? "bg-green-500/10 border-green-500/50 text-white shadow-lg shadow-green-500/10"
-                                  : "bg-zinc-900 border-zinc-800 text-zinc-400"
-                              }`}
-                            >
-                              <span className="font-medium">{i.name}</span>
-                              <span
-                                className={`text-xs font-bold px-2 py-1 rounded ${
-                                  isSelected
-                                    ? "bg-green-500 text-black"
-                                    : "bg-black/30"
-                                }`}
-                              >
-                                + R$ {i.price.toFixed(2)}
-                              </span>
-                            </button>
-                          );
-                        })}
-                    </div>
-                  </div>
-                ))}
-
-              {!selectedProduct.category.includes("COMBO") &&
-                !selectedProduct.category.includes("ACOMPANHAMENTOS") &&
-                !selectedProduct.category.includes("BEBIDAS") &&
-                selectedProduct.priceCombo > 0 && (
-                  <div className="bg-gradient-to-br from-yellow-500/10 to-orange-500/10 border border-yellow-500/20 p-5 rounded-2xl space-y-4">
-                    <div className="flex justify-between items-center font-bold text-yellow-500 text-sm">
-                      <span className="flex items-center gap-2">
-                        <Flame size={16} fill="currentColor" /> Virar Combo?
-                      </span>
-                      <span className="bg-yellow-500 text-black px-2 py-0.5 rounded text-[10px]">
-                        + R${" "}
-                        {(
-                          selectedProduct.priceCombo - selectedProduct.priceSolo
-                        ).toFixed(2)}
-                      </span>
-                    </div>
-                    <div className="flex gap-3">
-                      <button
-                        onClick={() => setIsCombo(true)}
-                        className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${
-                          isCombo === true
-                            ? "bg-yellow-500 text-black shadow-lg shadow-yellow-500/20"
-                            : "bg-zinc-900 hover:bg-zinc-800 border border-white/5"
-                        }`}
-                      >
-                        SIM, QUERO
-                      </button>
-                      <button
-                        onClick={() => setIsCombo(false)}
-                        className={`flex-1 py-3 rounded-xl text-xs font-black transition-all ${
-                          isCombo === false
-                            ? "bg-white text-black"
-                            : "bg-zinc-900 hover:bg-zinc-800 border border-white/5"
-                        }`}
-                      >
-                        NÃO, OBRIGADO
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-              <div className="space-y-2">
-                <label className="text-xs font-black text-zinc-500 uppercase tracking-widest">
-                  Observações
-                </label>
-                <textarea
-                  placeholder="Ex: Sem cebola, capricha no molho..."
-                  className="w-full bg-zinc-950 p-4 rounded-2xl text-sm text-white border border-zinc-800 focus:border-yellow-500/50 outline-none transition resize-none h-24"
-                  value={obs}
-                  onChange={(e) => setObs(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <div className="p-6 border-t border-white/5 bg-zinc-950 pb-8">
-              <button
-                onClick={addToCart}
-                style={themeStyle}
-                className="w-full text-black py-4 rounded-2xl font-black text-lg flex justify-between px-8 hover:brightness-110 shadow-xl shadow-yellow-500/20 active:scale-95 transition-all transform"
-              >
-                <span>ADICIONAR</span>
-                <span>
-                  R${" "}
-                  {(
-                    parseFloat(selectedProduct.priceSolo) +
-                    (isCombo
-                      ? selectedProduct.priceCombo - selectedProduct.priceSolo
-                      : 0) +
-                    Object.values(selectedOptions)
-                      .flat()
-                      .reduce((a, b) => a + (b.price || 0), 0)
-                  ).toFixed(2)}
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* MODAL CARRINHO */}
+      {/* MODAL CARRINHO COM GPS */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-in slide-in-from-bottom-10 backdrop-blur-xl">
           <div className="flex justify-between items-center p-6 border-b border-white/5 bg-zinc-950">
             <h2 className="font-black text-2xl tracking-tight">Seu Pedido</h2>
             <button
-              onClick={() => {
-                setIsCartOpen(false);
-                window.history.back();
-              }}
+              onClick={() => window.history.back()}
               className="bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition"
             >
               <X size={20} />

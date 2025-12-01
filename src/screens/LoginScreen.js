@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from "react";
-import { ArrowRight, Clock, Lock, Utensils, Bike } from "lucide-react";
+import {
+  ArrowRight,
+  Clock,
+  Lock,
+  Utensils,
+  Bike,
+  ChevronRight,
+} from "lucide-react";
 
 export default function LoginScreen({
   setView,
@@ -13,14 +20,15 @@ export default function LoginScreen({
   const [password, setPassword] = useState("");
   const [showPasswordInput, setShowPasswordInput] = useState(false);
 
+  // --- SENHAS ---
   const SENHA_ADMIN = "sk2024";
+  const SENHA_COZINHA = "1234"; // <--- NOVA SENHA DA COZINHA
 
-  // Proteção contra falha no carregamento da config
   const config = appConfig || {
     openHour: 18,
     closeHour: 23,
     forceClose: false,
-    storeName: "SK System",
+    storeName: "SK BURGERS",
   };
   const currentHour = new Date().getHours();
   const isOpen =
@@ -28,8 +36,10 @@ export default function LoginScreen({
     currentHour >= config.openHour &&
     currentHour < config.closeHour;
 
+  // Monitora o campo de login para mostrar a senha se for "admin" ou "cozinha"
   useEffect(() => {
-    if (login.trim().toLowerCase() === "admin") {
+    const term = login.trim().toLowerCase();
+    if (term === "admin" || term === "cozinha") {
       setShowPasswordInput(true);
     } else {
       setShowPasswordInput(false);
@@ -37,10 +47,10 @@ export default function LoginScreen({
     }
   }, [login]);
 
-  // --- LOGIN PADRÃO (Botão Entrar) ---
   const handleLogin = () => {
     const term = login.trim().toLowerCase();
 
+    // 1. Login Admin
     if (term === "admin") {
       if (password === SENHA_ADMIN) {
         setCurrentUser({ name: "Dono", role: "admin" });
@@ -50,145 +60,177 @@ export default function LoginScreen({
       }
       return;
     }
-    performUserLogin(term);
-  };
 
-  // --- LOGIN RÁPIDO (Clicou na lista, entrou) ---
-  const handleQuickLogin = (term) => {
-    setLogin(term); // Preenche visualmente
-    performUserLogin(term); // Executa a ação
-  };
-
-  // Lógica compartilhada de validação
-  const performUserLogin = (term) => {
+    // 2. Login Cozinha (Agora com senha)
     if (term === "cozinha") {
-      setCurrentUser({ name: "Cozinha", role: "kitchen" });
-      setView("kitchen");
+      if (password === SENHA_COZINHA) {
+        setCurrentUser({ name: "Cozinha", role: "kitchen" });
+        setView("kitchen");
+      } else {
+        alert("Senha da cozinha incorreta!");
+      }
       return;
     }
 
+    // 3. Login Motoboy (Sem senha, direto)
+    performUserLogin(term);
+  };
+
+  const handleQuickLogin = (term) => {
+    setLogin(term);
+    // Se for cozinha, NÃO entra direto, apenas preenche para pedir senha
+    if (term === "cozinha") {
+      return;
+    }
+    // Se for motoboy, tenta entrar direto
+    performUserLogin(term);
+  };
+
+  const performUserLogin = (term) => {
     const moto = motoboys.find((m) => m.login === term);
     if (moto) {
       setCurrentUser({ ...moto, role: "motoboy" });
       setView("motoboy");
-    } else {
-      // Se não for admin (que já foi tratado), mostra erro
-      if (term !== "admin") alert("Usuário não encontrado.");
+    } else if (term !== "admin" && term !== "cozinha") {
+      alert("Usuário não encontrado.");
     }
   };
 
   return (
-    <div className="min-h-full flex flex-col items-center justify-center p-6 py-10">
-      <div className="w-full max-w-sm bg-neutral-900 border border-white/10 rounded-3xl p-8 shadow-2xl text-center relative">
-        {/* Logo e Status */}
-        <div
-          style={themeStyle}
-          className="w-24 h-24 rounded-full mx-auto flex items-center justify-center mb-6 shadow-[0_0_30px_rgba(0,0,0,0.5)] border-4 border-zinc-800"
-        >
-          <span className="font-black text-4xl text-black tracking-tighter">
-            SK
-          </span>
-        </div>
-        <h1 className="text-2xl font-black text-white mb-1">
-          {config.storeName}
-        </h1>
+    <div className="min-h-screen bg-black flex flex-col items-center justify-center relative overflow-hidden font-sans text-white">
+      {/* 1. IMAGEM DE FUNDO COM EFEITO ESCURO */}
+      <div className="absolute inset-0 z-0">
+        <img
+          src="https://images.unsplash.com/photo-1568901346375-23c9450c58cd?w=1080&fit=max"
+          alt="Background Burger"
+          className="w-full h-full object-cover opacity-50"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-black via-black/80 to-black/40"></div>
+      </div>
 
+      {/* 2. CONTEÚDO PRINCIPAL */}
+      <div className="relative z-10 w-full max-w-sm p-6 flex flex-col items-center">
+        {/* LOGO */}
+        <div className="mb-10 flex flex-col items-center animate-in slide-in-from-top-10 duration-1000">
+          <div className="w-32 h-32 bg-yellow-500 rounded-full flex items-center justify-center shadow-[0_0_50px_rgba(234,179,8,0.5)] border-4 border-black mb-4 relative">
+            <div className="absolute inset-0 bg-white opacity-20 rounded-full animate-pulse"></div>
+            <span className="font-black text-7xl text-black tracking-tighter mt-1 relative z-10">
+              SK
+            </span>
+          </div>
+          <h1
+            className="text-5xl font-black text-white tracking-widest drop-shadow-2xl"
+            style={{ textShadow: "0 4px 10px rgba(0,0,0,0.8)" }}
+          >
+            BURGERS
+          </h1>
+          <div className="h-1.5 w-24 bg-yellow-500 rounded-full mt-3 shadow-[0_0_15px_rgba(234,179,8,0.8)]"></div>
+        </div>
+
+        {/* STATUS DA LOJA */}
         <div
-          className={`inline-flex items-center gap-1 px-3 py-1 rounded-full text-[10px] font-bold border mb-6 ${
+          className={`mb-8 px-5 py-2 rounded-full border backdrop-blur-xl flex items-center gap-2 text-xs font-black tracking-widest shadow-2xl uppercase ${
             isOpen
-              ? "bg-green-500/20 text-green-400 border-green-500/50"
-              : "bg-red-500/20 text-red-400 border-red-500/50"
+              ? "bg-green-500/20 border-green-500 text-green-400 shadow-green-500/20"
+              : "bg-red-500/20 border-red-500 text-red-400 shadow-red-500/20"
           }`}
         >
           {isOpen ? (
             <>
-              <Clock size={10} /> ABERTO AGORA
+              <Clock size={14} /> ABERTO AGORA
             </>
           ) : (
             <>
-              <Lock size={10} /> FECHADO • Abre às {config.openHour}h
+              <Lock size={14} /> FECHADO • ABRE ÀS {config.openHour}H
             </>
           )}
         </div>
 
-        <div className="space-y-6">
-          {/* Botão Cliente */}
-          <button
-            onClick={() => setView("customer")}
-            style={themeStyle}
-            className="w-full text-black font-black py-4 rounded-xl shadow-lg transition flex items-center justify-center gap-2 group text-lg hover:brightness-110 active:scale-95"
-          >
-            QUERO PEDIR <ArrowRight size={20} />
-          </button>
+        {/* BOTÃO CLIENTE */}
+        <button
+          onClick={() => setView("customer")}
+          className="w-full bg-yellow-500 hover:bg-yellow-400 text-black py-5 rounded-2xl font-black text-xl shadow-[0_0_40px_rgba(234,179,8,0.4)] transition transform hover:scale-105 active:scale-95 flex items-center justify-center gap-3 mb-12 group border-2 border-yellow-400"
+        >
+          FAZER PEDIDO{" "}
+          <ArrowRight
+            className="group-hover:translate-x-2 transition"
+            size={28}
+            strokeWidth={3}
+          />
+        </button>
 
-          {/* Área de Login */}
-          <div className="bg-zinc-900/50 p-4 rounded-xl border border-white/5 text-left">
-            <label className="text-[10px] text-zinc-500 uppercase font-bold mb-2 block">
-              Área da Equipe
-            </label>
+        {/* ÁREA DA EQUIPE */}
+        <div className="w-full bg-zinc-900/40 backdrop-blur-xl border border-white/10 rounded-3xl p-6 animate-in slide-in-from-bottom-10 duration-1000 delay-200">
+          <p className="text-[10px] text-zinc-400 font-bold uppercase tracking-widest mb-4 text-center border-b border-white/5 pb-2">
+            Área Restrita da Equipe
+          </p>
 
-            {/* Input Manual */}
-            <div className="space-y-3">
+          <div className="flex gap-2 mb-4">
+            <input
+              value={login}
+              onChange={(e) => setLogin(e.target.value)}
+              placeholder="Login..."
+              className="flex-1 bg-black/50 border border-white/10 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none focus:border-yellow-500/50 focus:bg-black/80 transition"
+            />
+            <button
+              onClick={handleLogin}
+              className="bg-zinc-800 hover:bg-zinc-700 text-white p-3 rounded-xl transition border border-white/10 flex items-center justify-center"
+            >
+              <ChevronRight />
+            </button>
+          </div>
+
+          {/* CAMPO DE SENHA (CONDICIONAL) */}
+          {showPasswordInput && (
+            <div className="animate-in fade-in slide-in-from-top-2 mb-4">
               <input
-                value={login}
-                onChange={(e) => setLogin(e.target.value)}
-                placeholder="Login (admin, cozinha...)"
-                className="w-full bg-zinc-800 p-3 rounded text-sm text-white border border-white/10 outline-none focus:border-white/30 transition"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder={
+                  login === "admin" ? "Senha Admin" : "Senha da Cozinha"
+                }
+                className="w-full bg-black/50 border border-red-500/50 rounded-xl px-4 py-3 text-sm text-white placeholder-zinc-600 outline-none focus:border-red-500"
               />
-
-              {showPasswordInput && (
-                <div className="animate-in slide-in-from-top-2">
-                  <input
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="Senha Admin"
-                    className="w-full bg-zinc-800 p-3 rounded text-sm text-white border border-red-500/50 outline-none focus:border-red-500 transition"
-                  />
-                  <p className="text-[10px] text-zinc-600 mt-1 text-right">
-                    Senha: sk2024
-                  </p>
-                </div>
+              {login === "cozinha" && (
+                <p className="text-[10px] text-zinc-500 mt-1 ml-1">
+                  Dica: a senha é 1234
+                </p>
               )}
-
-              <button
-                onClick={handleLogin}
-                className="w-full bg-zinc-700 hover:bg-zinc-600 text-white font-bold py-3 rounded transition flex justify-center items-center gap-2"
-              >
-                ENTRAR <ArrowRight size={14} />
-              </button>
             </div>
+          )}
 
-            {/* Atalhos Rápidos (Agora clicáveis!) */}
-            <div className="mt-4 pt-4 border-t border-white/5">
-              <p className="text-[10px] text-zinc-500 mb-2 font-bold">
-                Acesso Rápido:
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {/* Botão Cozinha */}
+          {/* ATALHOS RÁPIDOS */}
+          <div className="grid grid-cols-3 gap-2 pt-2">
+            <button
+              onClick={() => handleQuickLogin("cozinha")}
+              className="flex flex-col items-center justify-center bg-white/5 hover:bg-white/10 py-3 rounded-xl border border-white/5 transition active:scale-95"
+            >
+              <Utensils size={16} className="text-orange-500 mb-1" />
+              <span className="text-[9px] text-zinc-300 font-bold">
+                COZINHA
+              </span>
+            </button>
+            {motoboys &&
+              motoboys.map((m) => (
                 <button
-                  onClick={() => handleQuickLogin("cozinha")}
-                  className="flex items-center gap-1 cursor-pointer text-[10px] bg-orange-900/30 text-orange-400 border border-orange-500/30 px-3 py-2 rounded hover:bg-orange-900/50 transition font-bold"
+                  key={m.id}
+                  onClick={() => handleQuickLogin(m.login)}
+                  className="flex flex-col items-center justify-center bg-white/5 hover:bg-white/10 py-3 rounded-xl border border-white/5 transition active:scale-95"
                 >
-                  <Utensils size={12} /> Cozinha
+                  <Bike size={16} className="text-blue-500 mb-1" />
+                  <span className="text-[9px] text-zinc-300 font-bold">
+                    {m.name.split(" ")[0].toUpperCase()}
+                  </span>
                 </button>
-
-                {/* Botões Motoboys */}
-                {motoboys &&
-                  motoboys.map((m) => (
-                    <button
-                      key={m.id}
-                      onClick={() => handleQuickLogin(m.login)}
-                      className="flex items-center gap-1 cursor-pointer text-[10px] bg-blue-900/30 text-blue-400 border border-blue-500/30 px-3 py-2 rounded hover:bg-blue-900/50 transition font-bold"
-                    >
-                      <Bike size={12} /> {m.name.split(" ")[0]}
-                    </button>
-                  ))}
-              </div>
-            </div>
+              ))}
           </div>
         </div>
       </div>
+
+      <p className="absolute bottom-4 text-[10px] text-zinc-600 font-bold opacity-50">
+        SK SYSTEM v12.4 Premium
+      </p>
     </div>
   );
 }

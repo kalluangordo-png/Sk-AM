@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState } from "react";
 import {
   ShoppingBag,
   X,
@@ -6,16 +6,11 @@ import {
   Minus,
   ChefHat,
   MapPin,
-  Clock,
   ArrowRight,
-  Search,
   Trash2,
   Receipt,
-  Bike,
   CheckCircle,
-  MessageCircle,
   History,
-  Store,
 } from "lucide-react";
 
 export default function CustomerApp({
@@ -25,15 +20,14 @@ export default function CustomerApp({
   bairros,
   appConfig,
   orders,
-  myOrderIds, // IDs dos pedidos feitos neste dispositivo
-  categories, // ["LINHA SMASH", "BEBIDAS", etc]
+  myOrderIds,
+  categories,
   themeStyle,
   textThemeStyle,
 }) {
-  const [view, setView] = useState("menu"); // menu, cart, checkout, history
+  const [view, setView] = useState("menu");
   const [cart, setCart] = useState([]);
-  const [selectedItem, setSelectedItem] = useState(null); // Item focado no modal
-  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedItem, setSelectedItem] = useState(null);
   const [activeCategory, setActiveCategory] = useState(categories[0]);
 
   // --- ESTADOS DO FORMULÁRIO DE CHECKOUT ---
@@ -41,9 +35,9 @@ export default function CustomerApp({
     name: "",
     phone: "",
     address: "",
-    bairroIndex: "", // Índice do array de bairros
+    bairroIndex: "",
     payment: "Pix",
-    change: "", // Troco para
+    change: "",
     obs: "",
   });
 
@@ -59,29 +53,24 @@ export default function CustomerApp({
 
   // --- FILTRO DO MENU ---
   const filteredMenu = menuItems.filter((item) => {
-    const matchesSearch = item.name
-      .toLowerCase()
-      .includes(searchTerm.toLowerCase());
     const matchesCategory =
       activeCategory === "TODOS" || item.category === activeCategory;
-    return matchesSearch && matchesCategory && item.available; // Só mostra disponíveis
+    return matchesCategory && item.available;
   });
 
   // --- FUNÇÕES DO CARRINHO ---
   const openItemModal = (item) => {
-    setSelectedItem({ ...item, qtd: 1, obs: "", type: "solo" }); // type: solo ou combo
+    setSelectedItem({ ...item, qtd: 1, obs: "", type: "solo" });
   };
 
   const addToCart = () => {
     if (!selectedItem) return;
 
-    // Define preço baseado se é Combo ou Solo
     const finalPrice =
       selectedItem.type === "combo"
         ? selectedItem.priceCombo
         : selectedItem.priceSolo;
 
-    // Nome para exibir no carrinho (ex: X-Burger (COMBO))
     const finalName =
       selectedItem.type === "combo"
         ? `COMBO ${selectedItem.name}`
@@ -91,7 +80,7 @@ export default function CustomerApp({
       ...selectedItem,
       name: finalName,
       price: finalPrice,
-      id: Date.now(), // ID único para o item no carrinho
+      id: Date.now(),
     };
 
     setCart([...cart, newItem]);
@@ -104,13 +93,11 @@ export default function CustomerApp({
 
   // --- FINALIZAR PEDIDO ---
   const handleFinishOrder = () => {
-    // Validações
     if (!form.name.trim()) return alert("Por favor, digite seu nome.");
     if (!form.address.trim()) return alert("Digite seu endereço.");
     if (form.bairroIndex === "") return alert("Selecione seu bairro.");
     if (cart.length === 0) return alert("Seu carrinho está vazio.");
 
-    // Monta o objeto do pedido igual o App.js espera
     const newOrder = {
       customer: form.name,
       phone: form.phone,
@@ -121,7 +108,7 @@ export default function CustomerApp({
         name: i.name,
         qtd: i.qtd,
         price: i.price,
-        details: i.obs, // Observação do item
+        details: i.obs,
       })),
       total: finalTotal,
       payment: form.payment,
@@ -129,13 +116,13 @@ export default function CustomerApp({
       status: "preparing",
     };
 
-    addOrder(newOrder); // Envia para o App.js
-    setCart([]); // Limpa carrinho
-    setView("history"); // Vai para tela de histórico
+    addOrder(newOrder);
+    setCart([]);
+    setView("history");
     alert("Pedido enviado com sucesso! Acompanhe o status.");
   };
 
-  // --- RENDERIZAÇÃO: MODAL DE PRODUTO ---
+  // --- MODAL DE PRODUTO ---
   const renderModal = () => {
     if (!selectedItem) return null;
     const isCombo = selectedItem.type === "combo";
@@ -144,7 +131,7 @@ export default function CustomerApp({
       : selectedItem.priceSolo;
 
     return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+      <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
         <div className="bg-zinc-900 w-full max-w-sm rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative">
           <button
             onClick={() => setSelectedItem(null)}
@@ -169,7 +156,6 @@ export default function CustomerApp({
               </p>
             </div>
 
-            {/* SELEÇÃO SOLO / COMBO (Se tiver preço de combo) */}
             {selectedItem.priceCombo > 0 && (
               <div className="bg-black p-1 rounded-xl flex">
                 <button
@@ -195,7 +181,6 @@ export default function CustomerApp({
               </div>
             )}
 
-            {/* OBSERVAÇÕES */}
             <div>
               <label className="text-xs font-bold text-zinc-500 uppercase">
                 Alguma observação?
@@ -211,7 +196,6 @@ export default function CustomerApp({
               />
             </div>
 
-            {/* QUANTIDADE E BOTÃO */}
             <div className="flex items-center gap-4 pt-2">
               <div className="flex items-center bg-black rounded-xl border border-white/10">
                 <button
@@ -257,7 +241,6 @@ export default function CustomerApp({
 
   // --- TELA: HISTÓRICO ---
   if (view === "history") {
-    // Filtra apenas os pedidos feitos por este "usuário" (localstorage)
     const myHistory = orders.filter((o) => myOrderIds.includes(o.id));
 
     return (
@@ -284,7 +267,6 @@ export default function CustomerApp({
                 key={order.id}
                 className="bg-zinc-900 border border-white/5 rounded-2xl p-4 relative overflow-hidden"
               >
-                {/* Status Badge */}
                 <div
                   className={`absolute top-0 right-0 px-3 py-1 text-[10px] font-black uppercase rounded-bl-xl
                   ${
@@ -344,7 +326,6 @@ export default function CustomerApp({
         </header>
 
         <div className="space-y-4">
-          {/* Dados Pessoais */}
           <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
             <h3 className="text-yellow-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
               <ChefHat size={14} /> Seus Dados
@@ -363,7 +344,6 @@ export default function CustomerApp({
             />
           </section>
 
-          {/* Endereço */}
           <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
             <h3 className="text-blue-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
               <MapPin size={14} /> Entrega
@@ -390,7 +370,6 @@ export default function CustomerApp({
             />
           </section>
 
-          {/* Pagamento */}
           <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
             <h3 className="text-green-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
               <Receipt size={14} /> Pagamento
@@ -421,7 +400,6 @@ export default function CustomerApp({
             )}
           </section>
 
-          {/* Resumo Financeiro */}
           <div className="bg-zinc-800 p-4 rounded-2xl space-y-2">
             <div className="flex justify-between text-zinc-400 text-sm">
               <span>Subtotal</span>
@@ -561,20 +539,7 @@ export default function CustomerApp({
           </div>
         </div>
 
-        {/* BUSCA */}
-        <div className="px-4 mb-2">
-          <div className="relative">
-            <Search className="absolute left-3 top-3 text-zinc-500" size={18} />
-            <input
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              placeholder="O que você quer comer hoje?"
-              className="w-full bg-zinc-900 border border-white/5 rounded-xl py-2.5 pl-10 text-sm text-white outline-none focus:border-yellow-500/50 transition"
-            />
-          </div>
-        </div>
-
-        {/* CATEGORIAS */}
+        {/* CATEGORIAS (Agora sem a busca em cima) */}
         <div className="px-4 flex gap-2 overflow-x-auto scrollbar-hide pb-2">
           {["TODOS", ...categories].map((cat) => (
             <button
@@ -592,8 +557,8 @@ export default function CustomerApp({
         </div>
       </div>
 
-      {/* LISTA DE PRODUTOS */}
-      <div className="pt-44 px-4 pb-10 space-y-4">
+      {/* LISTA DE PRODUTOS (Padding ajustado para pt-32) */}
+      <div className="pt-32 px-4 pb-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-max">
         {filteredMenu.map((item) => (
           <div
             key={item.id}
@@ -625,8 +590,8 @@ export default function CustomerApp({
         ))}
 
         {filteredMenu.length === 0 && (
-          <div className="text-center py-10 text-zinc-500 text-sm">
-            Nenhum produto encontrado.
+          <div className="text-center py-10 text-zinc-500 text-sm col-span-full">
+            Nenhum produto encontrado nesta categoria.
           </div>
         )}
       </div>

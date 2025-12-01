@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Bell, Loader2, Maximize2, Monitor, Smartphone } from "lucide-react";
 
-// --- IMPORTANDO CONFIGURAÇÕES (Mantive igual) ---
+// --- IMPORTANDO CONFIGURAÇÕES ---
 import {
   db,
   auth,
@@ -82,7 +82,7 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  // --- SINCRONIZAÇÃO (Mantida a mesma lógica) ---
+  // --- SINCRONIZAÇÃO ---
   useEffect(() => {
     if (!db || !userAuth) {
       const localMenu = localStorage.getItem("sk_menu_v11");
@@ -384,18 +384,18 @@ export default function App() {
   }
 
   // --- LÓGICA DE LAYOUT INTELIGENTE ---
-  // "Wide" = Admin e Cozinha precisam de tela larga no PC
-  const isWideView = view === "admin" || view === "kitchen";
+  // "Wide" = Admin, Cozinha E CLIENTE (agora) podem usar tela cheia no PC
+  const isWideView =
+    view === "admin" || view === "kitchen" || view === "customer";
 
   return (
-    // CONTAINER PAI (Fundo da Mesa no PC / Invisível no Mobile)
     <div className="bg-zinc-900 w-full min-h-screen flex justify-center sm:items-center sm:py-8 font-sans selection:bg-yellow-500 selection:text-black">
-      {/* Decoração apenas para PC Grande (Mostra que é responsivo) */}
+      {/* Decoração apenas para PC Grande */}
       <div className="hidden xl:flex fixed bottom-8 left-8 flex-col gap-2 text-zinc-700 pointer-events-none">
         <div className="flex items-center gap-2">
           {isWideView ? <Monitor size={20} /> : <Smartphone size={20} />}
           <span className="font-bold text-xs tracking-widest uppercase">
-            Modo: {isWideView ? "Gestão Desktop" : "Aplicativo Mobile"}
+            Modo: {isWideView ? "Desktop Expandido" : "Mobile"}
           </span>
         </div>
       </div>
@@ -412,14 +412,12 @@ export default function App() {
           sm:h-[85vh] sm:rounded-[2.5rem] sm:border-[8px] sm:border-zinc-800
           
           ${
-            // Largura Dinâmica baseada na View
             isWideView
-              ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl" // Admin: Quase tela toda
-              : "sm:w-full sm:max-w-[420px]" // Cliente: Tamanho de Celular
+              ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl" // Tela Larga
+              : "sm:w-full sm:max-w-[420px]" // Tela Estreita (Login/Motoboy)
           }
         `}
       >
-        {/* Ilha Dinâmica / Detalhe visual no topo (Só aparece no PC) */}
         <div className="hidden sm:flex absolute top-0 left-0 right-0 justify-center pt-2 z-50 pointer-events-none">
           <div className="w-24 h-6 bg-zinc-800 rounded-b-xl flex items-center justify-center gap-2">
             <div className="w-10 h-1 bg-zinc-900 rounded-full opacity-50"></div>
@@ -427,7 +425,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Faixa de Status (Fixo no topo) */}
         <div
           style={themeStyle}
           className="shrink-0 text-black text-[9px] font-bold text-center py-1 z-[60] shadow-md flex justify-center items-center gap-2"
@@ -436,7 +433,6 @@ export default function App() {
           {isWideView && <Maximize2 size={8} />}
         </div>
 
-        {/* Notificações (Toasts) - Flutuando sobre tudo */}
         <div className="absolute top-12 left-0 right-0 flex flex-col items-center pointer-events-none z-[70] px-4 space-y-2">
           {toasts.map((t) => (
             <div
@@ -458,9 +454,7 @@ export default function App() {
           ))}
         </div>
 
-        {/* CONTEÚDO COM SCROLL PERFEITO */}
         <div className="flex-1 overflow-y-auto scroll-smooth relative bg-zinc-950 scrollbar-hide">
-          {/* Adicionei 'pb-safe' para respeitar a área segura do iPhone */}
           <div className="min-h-full flex flex-col">
             {view === "login" && (
               <LoginScreen

@@ -19,10 +19,8 @@ import {
   Locate,
 } from "lucide-react";
 
-// Importa as coordenadas da loja
 import { DELIVERY_SETTINGS } from "../config/firebase";
 
-// Função matemática para calcular distância em KM
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
   const R = 6371;
@@ -84,15 +82,12 @@ export default function CustomerApp({
   const [obs, setObs] = useState("");
   const [activeCategory, setActiveCategory] = useState("TODOS");
 
-  // --- MODO DE TESTE (LOJA SEMPRE ABERTA) ---
-  // Se quiser voltar ao normal depois, mude para:
-  // const isOpen = !appConfig.forceClose && new Date().getHours() >= appConfig.openHour && new Date().getHours() < appConfig.closeHour;
+  // --- FORÇANDO LOJA ABERTA PARA TESTE ---
   const isOpen = true;
+  // const isOpen = !appConfig.forceClose && new Date().getHours() >= appConfig.openHour && new Date().getHours() < appConfig.closeHour;
 
-  // Calculando total
   const productsTotal = cart.reduce((a, b) => a + b.price * b.qtd, 0);
 
-  // --- REGRA DE ENTREGA ---
   useEffect(() => {
     if (usingGps && distanceKm > 0) {
       let fee = 0;
@@ -109,7 +104,6 @@ export default function CustomerApp({
     }
   }, [distanceKm, productsTotal, usingGps]);
 
-  // --- BUSCA DE CEP ---
   const handleCepBlur = async () => {
     if (form.cep?.length === 8) {
       try {
@@ -135,7 +129,6 @@ export default function CustomerApp({
     }
   };
 
-  // --- GPS ---
   const handleGetLocation = () => {
     if (!navigator.geolocation) return alert("Ative o GPS do celular.");
     setIsLoadingLocation(true);
@@ -192,7 +185,6 @@ export default function CustomerApp({
     }
   };
 
-  // --- MANIPULAÇÃO DE DADOS ---
   const filteredMenu = useMemo(() => {
     if (!menuItems) return [];
     return menuItems.filter((item) => {
@@ -215,6 +207,7 @@ export default function CustomerApp({
     [form]
   );
 
+  // --- CONTROLE DO BOTÃO VOLTAR ---
   useEffect(() => {
     const handleBackButton = (event) => {
       if (selectedProduct) setSelectedProduct(null);
@@ -251,6 +244,7 @@ export default function CustomerApp({
     });
   };
 
+  // --- CORREÇÃO NO ADD TO CART ---
   const addToCart = () => {
     if (!selectedProduct) return;
     if (selectedProduct.stock !== undefined && selectedProduct.stock <= 0)
@@ -287,75 +281,59 @@ export default function CustomerApp({
       ...cart,
       { id: Date.now(), name, details: desc.join(", "), price, qtd: 1 },
     ]);
-    window.history.back();
-    setTimeout(() => openWithHistory(() => setIsCartOpen(true)), 100);
+
+    // --- MUDANÇA AQUI: Apenas trocamos o estado visualmente ---
+    // Aproveitamos o histórico que já foi criado ao abrir o produto
+    setSelectedProduct(null);
+    setIsCartOpen(true);
+    // -----------------------------------------------------------
+
     showToast("Adicionado!");
   };
 
   const finalTotal = Math.max(0, productsTotal + deliveryFee - discount);
 
-  // --- FUNÇÃO DE ENVIO CORRIGIDA ---
   const send = () => {
-    // 1. Validação de Campos Básicos
-    if (!form.name) return alert("Por favor, digite seu nome!");
-    if (!form.street || !form.number)
-      return alert("Preencha o endereço completo (Rua e Número)!");
+    if (!form.name || !form.street || !form.number)
+      return alert("Preencha o endereço!");
+    if (!usingGps && deliveryFee === 0 && !form.neighborhood)
+      return alert("Informe seu bairro ou use o GPS!");
 
-    // 2. Validação da Taxa de Entrega
-    // Se não usou GPS e a taxa tá zerada, é porque não escolheu bairro na lista
-    if (!usingGps && deliveryFee === 0 && !form.neighborhood) {
-      return alert(
-        "Selecione seu Bairro na lista ou use o GPS para calcular a entrega!"
-      );
-    }
+    const pointsEarned = Math.floor(finalTotal);
+    addOrder({
+      customer: form.name,
+      phone: appConfig.whatsapp,
+      address: `${form.street}, ${form.number} - ${form.neighborhood} (${
+        form.reference
+      }) ${usingGps ? `[${distanceKm.toFixed(1)}km]` : ""}`,
+      total: finalTotal,
+      payment: form.payment + (form.change ? ` (Troco p/ ${form.change})` : ""),
+      status: "preparing",
+      items: cart,
+      assignedTo: null,
+      deliveryFee: deliveryFee,
+    });
+    setForm((prev) => ({ ...prev, points: (prev.points || 0) + pointsEarned }));
+    setCart([]);
 
-    // 3. Envia o Pedido
-    try {
-      const pointsEarned = Math.floor(finalTotal);
-      addOrder({
-        customer: form.name,
-        phone: appConfig.whatsapp,
-        address: `${form.street}, ${form.number} - ${
-          form.neighborhood || "Bairro ñ informado"
-        } (${form.reference}) ${
-          usingGps ? `[${distanceKm.toFixed(1)}km]` : ""
-        }`,
-        total: finalTotal,
-        payment:
-          form.payment + (form.change ? ` (Troco p/ ${form.change})` : ""),
-        status: "preparing",
-        items: cart,
-        assignedTo: null,
-        deliveryFee: deliveryFee,
-      });
+    // Limpa os modais voltando o histórico
+    window.history.back();
 
-      setForm((prev) => ({
-        ...prev,
-        points: (prev.points || 0) + pointsEarned,
-      }));
-      setCart([]);
-      window.history.back();
-      setTab("orders");
+    setTab("orders");
 
-      // Mensagem WhatsApp
-      const msg = `🍔 *PEDIDO SK* \n👤 ${form.name}\n📍 ${form.street}, ${
-        form.number
-      } - ${form.neighborhood}\n\n${cart
-        .map((i) => `${i.qtd}x ${i.name}`)
-        .join("\n")}\n\n🛵 Entrega: ${
-        deliveryFee === 0 ? "GRÁTIS" : `R$ ${deliveryFee.toFixed(2)}`
-      }\n💰 TOTAL: R$ ${finalTotal.toFixed(2)}\n💳 Pagamento: ${form.payment}`;
-      window.open(
-        `https://wa.me/${appConfig.whatsapp}?text=${encodeURIComponent(msg)}`,
-        "_blank"
-      );
-    } catch (error) {
-      console.error(error);
-      alert("Erro ao enviar pedido. Tente novamente.");
-    }
+    const msg = `🍔 *PEDIDO SK* \n👤 ${form.name}\n📍 ${form.street}, ${
+      form.number
+    } - ${form.neighborhood}\n\n${cart
+      .map((i) => `${i.qtd}x ${i.name}`)
+      .join("\n")}\n\n🛵 Entrega: ${
+      deliveryFee === 0 ? "GRÁTIS" : `R$ ${deliveryFee.toFixed(2)}`
+    }\n💰 TOTAL: R$ ${finalTotal.toFixed(2)}`;
+    window.open(
+      `https://wa.me/${appConfig.whatsapp}?text=${encodeURIComponent(msg)}`,
+      "_blank"
+    );
   };
 
-  // --- CARDS ---
   const ProductCard = ({ item }) => (
     <div
       key={item.id}
@@ -446,7 +424,6 @@ export default function CustomerApp({
 
   return (
     <div className="bg-zinc-950 min-h-screen pb-24 font-sans text-white selection:bg-yellow-500 selection:text-black">
-      {/* HEADER */}
       <header className="sticky top-0 bg-zinc-950/80 backdrop-blur-xl z-40 px-5 py-4 flex justify-between items-center border-b border-white/5">
         <div className="flex items-center gap-3" onClick={onBack}>
           <div
@@ -481,7 +458,6 @@ export default function CustomerApp({
         </button>
       </header>
 
-      {/* CONTEÚDO */}
       {tab === "menu" && (
         <>
           <div className="px-5 mt-4">
@@ -617,7 +593,6 @@ export default function CustomerApp({
         </>
       )}
 
-      {/* TELA DE PEDIDOS E PERFIL (MANTIDOS) */}
       {tab === "orders" && (
         <div className="p-5 pt-10 animate-in fade-in">
           <h2 className="text-2xl font-black mb-6">Meus Pedidos</h2>
@@ -688,7 +663,6 @@ export default function CustomerApp({
         </div>
       )}
 
-      {/* BOTTOM BAR */}
       <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-xl border-t border-white/5 px-8 py-4 flex justify-between items-center z-50 pb-6">
         <button
           onClick={() => handleTabChange("menu")}
@@ -733,7 +707,6 @@ export default function CustomerApp({
         </button>
       </div>
 
-      {/* MODAL CARRINHO COM GPS */}
       {isCartOpen && (
         <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-in slide-in-from-bottom-10 backdrop-blur-xl">
           <div className="flex justify-between items-center p-6 border-b border-white/5 bg-zinc-950">

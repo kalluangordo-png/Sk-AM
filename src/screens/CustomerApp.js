@@ -1,962 +1,653 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
-  ShoppingCart,
-  MapPin,
-  CheckCircle,
-  Bike,
-  Package,
-  Plus,
+  ShoppingBag,
   X,
-  Flame,
+  Plus,
+  Minus,
+  ChefHat,
+  MapPin,
+  Clock,
+  ArrowRight,
   Search,
-  Gift,
-  Home,
-  List,
-  User,
-  ChevronRight,
-  Star,
-  Zap,
-  Locate,
+  Trash2,
+  Receipt,
+  Bike,
+  CheckCircle,
+  MessageCircle,
+  History,
+  Store,
 } from "lucide-react";
-
-import { DELIVERY_SETTINGS } from "../config/firebase";
-
-const calculateDistance = (lat1, lon1, lat2, lon2) => {
-  if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371;
-  const dLat = (lat2 - lat1) * (Math.PI / 180);
-  const dLon = (lon2 - lon1) * (Math.PI / 180);
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * (Math.PI / 180)) *
-      Math.cos(lat2 * (Math.PI / 180)) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-};
 
 export default function CustomerApp({
   onBack,
-  addOrder,
   menuItems,
-  categories,
-  showToast,
+  addOrder,
   bairros,
   appConfig,
   orders,
-  myOrderIds,
-  coupons,
+  myOrderIds, // IDs dos pedidos feitos neste dispositivo
+  categories, // ["LINHA SMASH", "BEBIDAS", etc]
   themeStyle,
   textThemeStyle,
 }) {
-  const [tab, setTab] = useState("menu");
+  const [view, setView] = useState("menu"); // menu, cart, checkout, history
   const [cart, setCart] = useState([]);
-  const [isCartOpen, setIsCartOpen] = useState(false);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-
-  const [form, setForm] = useState(
-    () =>
-      JSON.parse(localStorage.getItem("sk_user_data")) || {
-        name: "",
-        cep: "",
-        street: "",
-        number: "",
-        neighborhood: "",
-        reference: "",
-        payment: "Pix",
-        change: "",
-        points: 0,
-      }
-  );
-
-  const [deliveryFee, setDeliveryFee] = useState(0);
-  const [distanceKm, setDistanceKm] = useState(0);
-  const [usingGps, setUsingGps] = useState(false);
+  const [selectedItem, setSelectedItem] = useState(null); // Item focado no modal
   const [searchTerm, setSearchTerm] = useState("");
-  const [couponCode, setCouponCode] = useState("");
-  const [discount, setDiscount] = useState(0);
-  const [selectedOptions, setSelectedOptions] = useState({});
-  const [isCombo, setIsCombo] = useState(null);
-  const [obs, setObs] = useState("");
-  const [activeCategory, setActiveCategory] = useState("TODOS");
+  const [activeCategory, setActiveCategory] = useState(categories[0]);
 
-  // --- FORÇANDO LOJA ABERTA PARA TESTE ---
-  const isOpen = true;
+  // --- ESTADOS DO FORMULÁRIO DE CHECKOUT ---
+  const [form, setForm] = useState({
+    name: "",
+    phone: "",
+    address: "",
+    bairroIndex: "", // Índice do array de bairros
+    payment: "Pix",
+    change: "", // Troco para
+    obs: "",
+  });
 
-  const productsTotal = cart.reduce((a, b) => a + b.price * b.qtd, 0);
+  // --- CALCULA TOTAIS ---
+  const cartTotal = cart.reduce((acc, item) => acc + item.price * item.qtd, 0);
 
-  // --- LÓGICA DO BOTÃO VOLTAR ---
-  useEffect(() => {
-    const handleBackButton = (event) => {
-      if (selectedProduct || isCartOpen) {
-        event.preventDefault();
-        setSelectedProduct(null);
-        setIsCartOpen(false);
-      } else if (tab !== "menu") {
-        setTab("menu");
-      }
-    };
-    window.history.pushState(null, document.title, window.location.href);
-    window.addEventListener("popstate", handleBackButton);
-    return () => window.removeEventListener("popstate", handleBackButton);
-  }, [selectedProduct, isCartOpen, tab]);
+  const deliveryFee =
+    form.bairroIndex !== "" && bairros[form.bairroIndex]
+      ? parseFloat(bairros[form.bairroIndex].taxa)
+      : 0;
 
-  // --- REGRAS DE ENTREGA ---
-  useEffect(() => {
-    if (usingGps && distanceKm > 0) {
-      let fee = 0;
-      if (distanceKm <= 3) {
-        fee = productsTotal > 35.0 ? 0.0 : 5.0;
-      } else if (distanceKm <= 5) {
-        fee = 7.0;
-      } else if (distanceKm <= 7) {
-        fee = 10.0;
-      } else {
-        fee = distanceKm * 1.5;
-      }
-      setDeliveryFee(fee);
-    }
-  }, [distanceKm, productsTotal, usingGps]);
+  const finalTotal = cartTotal + deliveryFee;
 
-  const handleCepBlur = async () => {
-    if (form.cep?.length === 8) {
-      try {
-        const req = await fetch(`https://viacep.com.br/ws/${form.cep}/json/`);
-        const data = await req.json();
-        if (!data.erro) {
-          setForm((prev) => ({
-            ...prev,
-            street: data.logradouro,
-            neighborhood: data.bairro,
-          }));
-          const bairroFixo = bairros.find((b) =>
-            b.nome.toLowerCase().includes(data.bairro.toLowerCase())
-          );
-          if (bairroFixo) {
-            setDeliveryFee(bairroFixo.taxa);
-            setUsingGps(false);
-          }
-        }
-      } catch (e) {
-        console.error("Erro CEP", e);
-      }
-    }
-  };
+  // --- FILTRO DO MENU ---
+  const filteredMenu = menuItems.filter((item) => {
+    const matchesSearch = item.name
+      .toLowerCase()
+      .includes(searchTerm.toLowerCase());
+    const matchesCategory =
+      activeCategory === "TODOS" || item.category === activeCategory;
+    return matchesSearch && matchesCategory && item.available; // Só mostra disponíveis
+  });
 
-  const handleGetLocation = () => {
-    if (!navigator.geolocation) return alert("Ative o GPS do celular.");
-    setIsLoadingLocation(true);
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const { latitude, longitude } = position.coords;
-        const dist = calculateDistance(
-          DELIVERY_SETTINGS.storeLat,
-          DELIVERY_SETTINGS.storeLng,
-          latitude,
-          longitude
-        );
-        setDistanceKm(dist);
-        setUsingGps(true);
-
-        try {
-          const req = await fetch(
-            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}`
-          );
-          const data = await req.json();
-          if (data && data.address) {
-            setForm((prev) => ({
-              ...prev,
-              street: data.address.road || "",
-              neighborhood:
-                data.address.suburb || data.address.neighbourhood || "",
-              number: data.address.house_number || "",
-            }));
-          }
-        } catch (e) {}
-
-        setIsLoadingLocation(false);
-        showToast(`Localizado! Distância: ${dist.toFixed(1)}km`);
-      },
-      (error) => {
-        setIsLoadingLocation(false);
-        alert("Erro no GPS.");
-      }
-    );
-  };
-
-  const applyCoupon = () => {
-    const found = coupons.find((c) => c.code === couponCode.toUpperCase());
-    if (found) {
-      const valorDesconto =
-        found.type === "percent"
-          ? productsTotal * found.discount
-          : found.discount;
-      setDiscount(valorDesconto);
-      showToast("Cupom aplicado!", "success");
-    } else {
-      showToast("Cupom inválido", "error");
-      setDiscount(0);
-    }
-  };
-
-  const filteredMenu = useMemo(() => {
-    if (!menuItems) return [];
-    return menuItems.filter((item) => {
-      const matchesSearch = item.name
-        .toLowerCase()
-        .includes(searchTerm.toLowerCase());
-      if (activeCategory === "TODOS" && searchTerm === "") return true;
-      const matchesCategory =
-        activeCategory === "TODOS" || item.category === activeCategory;
-      return matchesSearch && matchesCategory;
-    });
-  }, [menuItems, searchTerm, activeCategory]);
-
-  const myActiveOrders = useMemo(
-    () => orders.filter((o) => myOrderIds.includes(o.id)),
-    [orders, myOrderIds]
-  );
-  useEffect(
-    () => localStorage.setItem("sk_user_data", JSON.stringify(form)),
-    [form]
-  );
-
-  const handleTabChange = (newTab) => {
-    if (newTab !== tab) setTab(newTab);
-  };
-
-  const handleOptionChange = (groupName, item, type, price) => {
-    setSelectedOptions((prev) => {
-      const current = prev[groupName] || [];
-      if (type === "radio") return { ...prev, [groupName]: [item] };
-      if (type === "check") {
-        const exists = current.find((x) => x.name === item.name);
-        if (exists)
-          return {
-            ...prev,
-            [groupName]: current.filter((x) => x.name !== item.name),
-          };
-        return { ...prev, [groupName]: [...current, { ...item, price }] };
-      }
-      return prev;
-    });
+  // --- FUNÇÕES DO CARRINHO ---
+  const openItemModal = (item) => {
+    setSelectedItem({ ...item, qtd: 1, obs: "", type: "solo" }); // type: solo ou combo
   };
 
   const addToCart = () => {
-    if (!selectedProduct) return;
-    if (selectedProduct.stock !== undefined && selectedProduct.stock <= 0)
-      return alert("Produto Esgotado!");
+    if (!selectedItem) return;
 
-    if (selectedProduct.options) {
-      for (let opt of selectedProduct.options) {
-        if (
-          opt.required &&
-          (!selectedOptions[opt.name] || selectedOptions[opt.name].length === 0)
-        )
-          return alert(`Selecione: ${opt.name}`);
-      }
-    }
+    // Define preço baseado se é Combo ou Solo
+    const finalPrice =
+      selectedItem.type === "combo"
+        ? selectedItem.priceCombo
+        : selectedItem.priceSolo;
 
-    let price = selectedProduct.priceSolo;
-    let name = selectedProduct.name;
-    let desc = [];
-    Object.keys(selectedOptions).forEach((key) => {
-      selectedOptions[key].forEach((opt) => {
-        desc.push(opt.name);
-        if (opt.price) price += opt.price;
-      });
-    });
+    // Nome para exibir no carrinho (ex: X-Burger (COMBO))
+    const finalName =
+      selectedItem.type === "combo"
+        ? `COMBO ${selectedItem.name}`
+        : selectedItem.name;
 
-    if (isCombo) {
-      price = selectedProduct.priceCombo || price;
-      name = `COMBO ${name}`;
-      desc.push("+ Batata + Refri");
-    }
-    if (obs) desc.push(`Obs: ${obs}`);
-
-    setCart([
-      ...cart,
-      { id: Date.now(), name, details: desc.join(", "), price, qtd: 1 },
-    ]);
-
-    // --- TRANSIÇÃO DIRETA (SEM TIMEOUT PARA NÃO TRAVAR) ---
-    setSelectedProduct(null);
-    setIsCartOpen(true);
-    // -----------------------------------------------------
-
-    showToast("Adicionado!");
-  };
-
-  const finalTotal = Math.max(0, productsTotal + deliveryFee - discount);
-
-  const send = () => {
-    if (!form.name || !form.street || !form.number)
-      return alert("Preencha o endereço!");
-    if (!usingGps && deliveryFee === 0 && !form.neighborhood)
-      return alert("Informe seu bairro ou use o GPS!");
-
-    const pointsEarned = Math.floor(finalTotal);
-    addOrder({
-      customer: form.name,
-      phone: appConfig.whatsapp,
-      address: `${form.street}, ${form.number} - ${form.neighborhood} (${
-        form.reference
-      }) ${usingGps ? `[${distanceKm.toFixed(1)}km]` : ""}`,
-      total: finalTotal,
-      payment: form.payment + (form.change ? ` (Troco p/ ${form.change})` : ""),
-      status: "preparing",
-      items: cart,
-      assignedTo: null,
-      deliveryFee: deliveryFee,
-    });
-    setForm((prev) => ({ ...prev, points: (prev.points || 0) + pointsEarned }));
-    setCart([]);
-    setIsCartOpen(false);
-    setTab("orders");
-
-    const msg = `🍔 *PEDIDO SK* \n👤 ${form.name}\n📍 ${form.street}, ${
-      form.number
-    } - ${form.neighborhood}\n\n${cart
-      .map((i) => `${i.qtd}x ${i.name}`)
-      .join("\n")}\n\n🛵 Entrega: ${
-      deliveryFee === 0 ? "GRÁTIS" : `R$ ${deliveryFee.toFixed(2)}`
-    }\n💰 TOTAL: R$ ${finalTotal.toFixed(2)}`;
-    window.open(
-      `https://wa.me/${appConfig.whatsapp}?text=${encodeURIComponent(msg)}`,
-      "_blank"
-    );
-  };
-
-  const ProductCard = ({ item }) => (
-    <div
-      key={item.id}
-      onClick={() => {
-        setSelectedProduct(item);
-        setSelectedOptions({});
-        setIsCombo(null);
-        setObs("");
-        window.history.pushState(
-          { modal: "product" },
-          "",
-          window.location.href
-        );
-      }}
-      className={`relative flex flex-col bg-zinc-900 border border-white/5 rounded-3xl overflow-hidden active:scale-[0.98] transition shadow-lg mb-6 ${
-        !item.available || item.stock <= 0 ? "opacity-60 grayscale" : ""
-      }`}
-    >
-      <div className="h-44 w-full relative">
-        <img src={item.image} className="w-full h-full object-cover" />
-        <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 via-transparent to-transparent opacity-90"></div>
-        <div className="absolute bottom-3 left-4 right-4">
-          <div className="flex items-center gap-1 text-yellow-500 mb-1">
-            <Star size={12} fill="#EAB308" />{" "}
-            <span className="text-xs font-bold">{item.rating || "5.0"}</span>
-          </div>
-          <h3 className="font-black text-xl text-white leading-none shadow-black drop-shadow-md">
-            {item.name}
-          </h3>
-        </div>
-      </div>
-      <div className="p-4 pt-2 flex justify-between items-end bg-zinc-900">
-        <p className="text-xs text-zinc-400 line-clamp-2 w-2/3 leading-relaxed">
-          {item.description}
-        </p>
-        <div className="flex flex-col items-end">
-          <div className="flex items-center gap-2 mt-2">
-            <span className="font-black text-lg text-white">
-              R$ {item.priceSolo.toFixed(2)}
-            </span>
-            <button className="bg-yellow-500 text-black p-1.5 rounded-full shadow-lg shadow-yellow-500/20">
-              <Plus size={18} strokeWidth={3} />
-            </button>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-
-  const OrderStatus = ({ status }) => {
-    const current = {
-      preparing: { label: "Cozinha", color: "text-orange-500", percent: "33%" },
-      ready: { label: "Pronto", color: "text-yellow-500", percent: "66%" },
-      delivering: {
-        label: "A Caminho",
-        color: "text-blue-500",
-        percent: "80%",
-      },
-      delivered: {
-        label: "Entregue",
-        color: "text-green-500",
-        percent: "100%",
-      },
-    }[status] || {
-      label: "Processando",
-      color: "text-gray-500",
-      percent: "10%",
+    const newItem = {
+      ...selectedItem,
+      name: finalName,
+      price: finalPrice,
+      id: Date.now(), // ID único para o item no carrinho
     };
 
+    setCart([...cart, newItem]);
+    setSelectedItem(null);
+  };
+
+  const removeFromCart = (itemId) => {
+    setCart(cart.filter((i) => i.id !== itemId));
+  };
+
+  // --- FINALIZAR PEDIDO ---
+  const handleFinishOrder = () => {
+    // Validações
+    if (!form.name.trim()) return alert("Por favor, digite seu nome.");
+    if (!form.address.trim()) return alert("Digite seu endereço.");
+    if (form.bairroIndex === "") return alert("Selecione seu bairro.");
+    if (cart.length === 0) return alert("Seu carrinho está vazio.");
+
+    // Monta o objeto do pedido igual o App.js espera
+    const newOrder = {
+      customer: form.name,
+      phone: form.phone,
+      address: `${form.address} - ${bairros[form.bairroIndex].nome}`,
+      bairro: bairros[form.bairroIndex].nome,
+      deliveryFee: deliveryFee,
+      items: cart.map((i) => ({
+        name: i.name,
+        qtd: i.qtd,
+        price: i.price,
+        details: i.obs, // Observação do item
+      })),
+      total: finalTotal,
+      payment: form.payment,
+      change: form.payment === "Dinheiro" ? form.change : null,
+      status: "preparing",
+    };
+
+    addOrder(newOrder); // Envia para o App.js
+    setCart([]); // Limpa carrinho
+    setView("history"); // Vai para tela de histórico
+    alert("Pedido enviado com sucesso! Acompanhe o status.");
+  };
+
+  // --- RENDERIZAÇÃO: MODAL DE PRODUTO ---
+  const renderModal = () => {
+    if (!selectedItem) return null;
+    const isCombo = selectedItem.type === "combo";
+    const currentPrice = isCombo
+      ? selectedItem.priceCombo
+      : selectedItem.priceSolo;
+
     return (
-      <div className="mt-3">
-        <div className="flex justify-between items-center mb-1">
-          <span
-            className={`text-xs font-bold ${current.color} flex items-center gap-1`}
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+        <div className="bg-zinc-900 w-full max-w-sm rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative">
+          <button
+            onClick={() => setSelectedItem(null)}
+            className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white z-10"
           >
-            <Flame size={12} /> {current.label}
-          </span>
-        </div>
-        <div className="h-1.5 w-full bg-zinc-800 rounded-full overflow-hidden">
-          <div
-            className={`h-full transition-all duration-1000 bg-current ${current.color.replace(
-              "text-",
-              "bg-"
-            )}`}
-            style={{ width: current.percent }}
-          ></div>
+            <X size={20} />
+          </button>
+
+          <img
+            src={selectedItem.image}
+            className="w-full h-48 object-cover"
+            alt={selectedItem.name}
+          />
+
+          <div className="p-5 space-y-4">
+            <div>
+              <h3 className="text-2xl font-black text-white leading-none">
+                {selectedItem.name}
+              </h3>
+              <p className="text-zinc-400 text-sm mt-2 leading-relaxed">
+                {selectedItem.description}
+              </p>
+            </div>
+
+            {/* SELEÇÃO SOLO / COMBO (Se tiver preço de combo) */}
+            {selectedItem.priceCombo > 0 && (
+              <div className="bg-black p-1 rounded-xl flex">
+                <button
+                  onClick={() =>
+                    setSelectedItem({ ...selectedItem, type: "solo" })
+                  }
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
+                    !isCombo ? "bg-zinc-800 text-white" : "text-zinc-500"
+                  }`}
+                >
+                  SÓ O LANCHE (R$ {selectedItem.priceSolo.toFixed(2)})
+                </button>
+                <button
+                  onClick={() =>
+                    setSelectedItem({ ...selectedItem, type: "combo" })
+                  }
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold transition ${
+                    isCombo ? "bg-yellow-500 text-black" : "text-zinc-500"
+                  }`}
+                >
+                  COMBO (R$ {selectedItem.priceCombo.toFixed(2)})
+                </button>
+              </div>
+            )}
+
+            {/* OBSERVAÇÕES */}
+            <div>
+              <label className="text-xs font-bold text-zinc-500 uppercase">
+                Alguma observação?
+              </label>
+              <textarea
+                className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm mt-1 outline-none focus:border-yellow-500"
+                rows="2"
+                placeholder="Ex: Sem cebola, capricha no molho..."
+                value={selectedItem.obs}
+                onChange={(e) =>
+                  setSelectedItem({ ...selectedItem, obs: e.target.value })
+                }
+              />
+            </div>
+
+            {/* QUANTIDADE E BOTÃO */}
+            <div className="flex items-center gap-4 pt-2">
+              <div className="flex items-center bg-black rounded-xl border border-white/10">
+                <button
+                  onClick={() =>
+                    setSelectedItem((prev) => ({
+                      ...prev,
+                      qtd: Math.max(1, prev.qtd - 1),
+                    }))
+                  }
+                  className="p-3 text-zinc-400 hover:text-white"
+                >
+                  <Minus size={18} />
+                </button>
+                <span className="font-black text-white w-8 text-center">
+                  {selectedItem.qtd}
+                </span>
+                <button
+                  onClick={() =>
+                    setSelectedItem((prev) => ({
+                      ...prev,
+                      qtd: prev.qtd + 1,
+                    }))
+                  }
+                  className="p-3 text-zinc-400 hover:text-white"
+                >
+                  <Plus size={18} />
+                </button>
+              </div>
+
+              <button
+                onClick={addToCart}
+                className="flex-1 bg-green-600 hover:bg-green-500 text-white font-black py-3.5 rounded-xl flex justify-between px-6 items-center shadow-lg active:scale-95 transition"
+              >
+                <span>ADICIONAR</span>
+                <span>R$ {(currentPrice * selectedItem.qtd).toFixed(2)}</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
   };
 
-  return (
-    <div className="bg-zinc-950 min-h-screen pb-24 font-sans text-white selection:bg-yellow-500 selection:text-black">
-      {/* HEADER */}
-      <header className="sticky top-0 bg-zinc-950/80 backdrop-blur-xl z-40 px-5 py-4 flex justify-between items-center border-b border-white/5">
-        <div className="flex items-center gap-3" onClick={onBack}>
-          <div
-            style={themeStyle}
-            className="w-12 h-12 rounded-full flex items-center justify-center font-black text-black text-sm shadow-lg shadow-yellow-500/20 border-2 border-yellow-500/50"
+  // --- TELA: HISTÓRICO ---
+  if (view === "history") {
+    // Filtra apenas os pedidos feitos por este "usuário" (localstorage)
+    const myHistory = orders.filter((o) => myOrderIds.includes(o.id));
+
+    return (
+      <div className="min-h-screen bg-zinc-950 pb-20 p-4">
+        <header className="flex items-center gap-4 mb-6 pt-4">
+          <button
+            onClick={() => setView("menu")}
+            className="bg-zinc-900 p-2 rounded-full text-white border border-white/10"
           >
-            SK
-          </div>
-          <div>
-            <h1 className="font-black text-xl leading-none tracking-wide text-white uppercase">
-              {appConfig.storeName}
-            </h1>
-            <div className="flex items-center gap-1.5 mt-1">
-              <span className={`relative flex h-2 w-2`}>
-                <span
-                  className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                    isOpen ? "bg-green-400" : "bg-red-400"
-                  }`}
-                ></span>
-                <span
-                  className={`relative inline-flex rounded-full h-2 w-2 ${
-                    isOpen ? "bg-green-500" : "bg-red-500"
-                  }`}
-                ></span>
-              </span>
-              <p
-                className={`text-[10px] font-bold tracking-wider ${
-                  isOpen ? "text-green-500" : "text-red-500"
-                }`}
-              >
-                {isOpen ? "ABERTO AGORA" : "FECHADO"}
-              </p>
-            </div>
-          </div>
-        </div>
-        <button
-          onClick={() => {
-            setIsCartOpen(true);
-            window.history.pushState(
-              { modal: "cart" },
-              "",
-              window.location.href
-            );
-          }}
-          className="relative bg-zinc-900 p-3 rounded-full border border-white/10 active:scale-90 transition hover:bg-zinc-800"
-        >
-          <ShoppingCart size={22} className="text-white" />
-          {cart.length > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-600 text-[10px] min-w-[1.25rem] h-5 px-1 rounded-full flex items-center justify-center font-bold border-2 border-zinc-950 shadow-sm animate-bounce">
-              {cart.length}
-            </span>
-          )}
-        </button>
-      </header>
+            <ArrowRight className="rotate-180" />
+          </button>
+          <h1 className="text-xl font-black text-white">Meus Pedidos</h1>
+        </header>
 
-      {/* CONTEÚDO */}
-      {tab === "menu" && (
-        <>
-          <div className="px-5 mt-4">
-            <div className="relative group">
-              <Search
-                size={18}
-                className="absolute left-3 top-3.5 text-zinc-500 group-focus-within:text-yellow-500 transition"
-              />
-              <input
-                className="w-full bg-zinc-900 border border-white/5 rounded-2xl py-3.5 pl-11 pr-4 text-sm text-white placeholder-zinc-500 outline-none focus:border-yellow-500/50 focus:ring-1 focus:ring-yellow-500/50 transition-all shadow-inner"
-                placeholder="O que vamos comer hoje?"
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-              />
-            </div>
+        {myHistory.length === 0 ? (
+          <div className="text-center py-20 opacity-50">
+            <Receipt size={64} className="mx-auto mb-4 text-zinc-600" />
+            <p className="text-zinc-400">Você ainda não fez pedidos.</p>
           </div>
-
-          <div className="px-5 mt-6">
-            <div className="relative w-full h-40 rounded-3xl overflow-hidden shadow-2xl shadow-yellow-900/20 group">
-              <img
-                src="https://images.unsplash.com/photo-1513104890138-7c749659a591?w=800&auto=format&fit=crop"
-                className="w-full h-full object-cover transition duration-700 group-hover:scale-105"
-                alt="Banner"
-              />
-              <div className="absolute inset-0 bg-gradient-to-r from-black/90 via-black/40 to-transparent flex flex-col justify-center px-6">
-                <span className="bg-yellow-500 text-black text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider flex items-center gap-1 w-fit mb-2">
-                  <Zap size={10} fill="black" /> OFERTA
-                </span>
-                <h3 className="font-black text-2xl text-white leading-tight shadow-black drop-shadow-lg">
-                  PIZZA DO CHEF
-                </h3>
-                <p className="text-xs text-gray-300 font-medium mb-3 max-w-[200px]">
-                  Peça hoje e ganhe borda recheada grátis!
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <div className="mt-6 pl-5 flex gap-4 overflow-x-auto pb-4 scrollbar-hide snap-x">
-            <button
-              onClick={() => setActiveCategory("TODOS")}
-              className="flex flex-col items-center gap-2 snap-start min-w-[70px]"
-            >
+        ) : (
+          <div className="space-y-4">
+            {myHistory.map((order) => (
               <div
-                className={`w-[70px] h-[70px] rounded-full p-[2px] transition-all ${
-                  activeCategory === "TODOS"
-                    ? "bg-gradient-to-tr from-yellow-400 via-orange-500 to-red-600 animate-spin-slow"
-                    : "bg-zinc-800"
-                }`}
+                key={order.id}
+                className="bg-zinc-900 border border-white/5 rounded-2xl p-4 relative overflow-hidden"
               >
-                <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center border-2 border-zinc-950">
-                  <span className="font-bold text-[10px]">TODOS</span>
+                {/* Status Badge */}
+                <div
+                  className={`absolute top-0 right-0 px-3 py-1 text-[10px] font-black uppercase rounded-bl-xl
+                  ${
+                    order.status === "ready"
+                      ? "bg-yellow-500 text-black"
+                      : order.status === "delivering"
+                      ? "bg-blue-500 text-white"
+                      : order.status === "delivered"
+                      ? "bg-green-500 text-white"
+                      : "bg-zinc-700 text-zinc-300"
+                  }`}
+                >
+                  {order.status === "preparing" && "Em Preparo"}
+                  {order.status === "ready" && "Saiu p/ Entrega"}
+                  {order.status === "delivering" && "Motoboy a Caminho"}
+                  {order.status === "delivered" && "Entregue"}
+                </div>
+
+                <div className="text-xs text-zinc-500 mb-2">
+                  #{order.id.split("-")[1]} •{" "}
+                  {new Date(order.timestamp).toLocaleDateString()}
+                </div>
+                <div className="space-y-1 mb-3">
+                  {order.items.map((i, idx) => (
+                    <div key={idx} className="text-sm text-zinc-300">
+                      <span className="font-bold text-white">{i.qtd}x</span>{" "}
+                      {i.name}
+                    </div>
+                  ))}
+                </div>
+                <div className="border-t border-white/5 pt-2 flex justify-between items-center">
+                  <span className="text-xs text-zinc-500">Total Pago</span>
+                  <span className="font-black text-white">
+                    R$ {order.total.toFixed(2)}
+                  </span>
                 </div>
               </div>
-            </button>
-            {categories.map((cat) => (
-              <button
-                key={cat}
-                onClick={() => setActiveCategory(cat)}
-                className="flex flex-col items-center gap-2 snap-start min-w-[70px]"
-              >
-                <div
-                  className={`w-[70px] h-[70px] rounded-full p-[2px] transition-all ${
-                    activeCategory === cat
-                      ? "bg-gradient-to-tr from-yellow-400 via-orange-500 to-red-600"
-                      : "bg-zinc-800"
-                  }`}
-                >
-                  <div className="w-full h-full rounded-full bg-zinc-950 flex items-center justify-center border-2 border-zinc-950 text-2xl">
-                    {cat.includes("SMASH")
-                      ? "🍔"
-                      : cat.includes("PREMIUM")
-                      ? "👑"
-                      : cat.includes("BEBIDAS")
-                      ? "🥤"
-                      : cat.includes("ACOMP")
-                      ? "🍟"
-                      : "🍽️"}
-                  </div>
-                </div>
-                <span
-                  className={`text-[10px] font-bold whitespace-nowrap overflow-hidden text-ellipsis max-w-[70px] ${
-                    activeCategory === cat ? "text-yellow-500" : "text-zinc-500"
-                  }`}
-                >
-                  {cat.split(" ")[1] || cat}
-                </span>
-              </button>
             ))}
           </div>
+        )}
+      </div>
+    );
+  }
 
-          <div className="px-5 mt-2 space-y-8">
-            {activeCategory === "TODOS" && searchTerm === "" ? (
-              categories.map((cat) => {
-                const itemsInCat = filteredMenu.filter(
-                  (i) => i.category === cat
-                );
-                if (itemsInCat.length === 0) return null;
-                return (
-                  <div key={cat} className="animate-in slide-in-from-bottom-4">
-                    <div className="flex items-center gap-3 mb-4 mt-4 border-b border-white/10 pb-2">
-                      <div className="h-6 w-1 bg-yellow-500 rounded-full"></div>
-                      <h3 className="font-black text-lg text-white tracking-tight uppercase italic">
-                        {cat}
-                      </h3>
-                    </div>
-                    <div>
-                      {itemsInCat.map((item) => (
-                        <ProductCard key={item.id} item={item} />
-                      ))}
-                    </div>
-                  </div>
-                );
-              })
-            ) : (
-              <div className="animate-in slide-in-from-bottom-4">
-                {activeCategory !== "TODOS" && (
-                  <h2 className="font-bold text-lg mb-4 flex items-center gap-2 text-yellow-500 mt-4">
-                    <Flame size={18} /> {activeCategory}
-                  </h2>
-                )}
-                {filteredMenu.map((item) => (
-                  <ProductCard key={item.id} item={item} />
-                ))}
-                {filteredMenu.length === 0 && (
-                  <div className="text-center py-10 opacity-50">
-                    <p>Nada encontrado.</p>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </>
-      )}
+  // --- TELA: CHECKOUT ---
+  if (view === "checkout") {
+    return (
+      <div className="min-h-screen bg-zinc-950 pb-20 p-4 animate-in slide-in-from-right">
+        <header className="flex items-center gap-4 mb-6 pt-4">
+          <button
+            onClick={() => setView("cart")}
+            className="bg-zinc-900 p-2 rounded-full text-white border border-white/10"
+          >
+            <ArrowRight className="rotate-180" />
+          </button>
+          <h1 className="text-xl font-black text-white">Finalizar Pedido</h1>
+        </header>
 
-      {/* TELA DE PEDIDOS */}
-      {tab === "orders" && (
-        <div className="p-5 pt-10 animate-in fade-in">
-          <h2 className="text-2xl font-black mb-6">Meus Pedidos</h2>
-          {myActiveOrders.length === 0 ? (
-            <div className="text-center py-20 opacity-50">
-              <Package size={64} className="mx-auto mb-4 text-zinc-700" />
-              <p className="font-bold text-zinc-500">Sua lista está vazia.</p>
-              <button
-                onClick={() => setTab("menu")}
-                className="mt-4 text-yellow-500 text-sm font-bold"
-              >
-                Ir para o Cardápio
-              </button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {myActiveOrders.map((o) => (
-                <div
-                  key={o.id}
-                  className="bg-zinc-900 border border-white/10 p-5 rounded-2xl shadow-lg"
+        <div className="space-y-4">
+          {/* Dados Pessoais */}
+          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
+            <h3 className="text-yellow-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+              <ChefHat size={14} /> Seus Dados
+            </h3>
+            <input
+              placeholder="Seu Nome"
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white mb-2 outline-none focus:border-yellow-500"
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+            />
+            <input
+              placeholder="Telefone / WhatsApp"
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500"
+              value={form.phone}
+              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+          </section>
+
+          {/* Endereço */}
+          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
+            <h3 className="text-blue-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+              <MapPin size={14} /> Entrega
+            </h3>
+            <select
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white mb-2 outline-none"
+              value={form.bairroIndex}
+              onChange={(e) =>
+                setForm({ ...form, bairroIndex: e.target.value })
+              }
+            >
+              <option value="">Selecione o Bairro...</option>
+              {bairros.map((b, idx) => (
+                <option key={idx} value={idx}>
+                  {b.nome} (+ R$ {b.taxa.toFixed(2)})
+                </option>
+              ))}
+            </select>
+            <input
+              placeholder="Rua, Número e Complemento"
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500"
+              value={form.address}
+              onChange={(e) => setForm({ ...form, address: e.target.value })}
+            />
+          </section>
+
+          {/* Pagamento */}
+          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
+            <h3 className="text-green-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+              <Receipt size={14} /> Pagamento
+            </h3>
+            <div className="flex gap-2 mb-3">
+              {["Pix", "Cartão", "Dinheiro"].map((method) => (
+                <button
+                  key={method}
+                  onClick={() => setForm({ ...form, payment: method })}
+                  className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
+                    form.payment === method
+                      ? "bg-green-600 border-green-600 text-white"
+                      : "bg-black border-white/10 text-zinc-400"
+                  }`}
                 >
-                  <div className="flex justify-between mb-3 border-b border-white/5 pb-2">
-                    <span className="font-bold text-zinc-400">
-                      #{o.id.split("-")[1]}
-                    </span>
-                    <span className="font-black text-green-500">
-                      R$ {o.total.toFixed(2)}
-                    </span>
+                  {method}
+                </button>
+              ))}
+            </div>
+            {form.payment === "Dinheiro" && (
+              <input
+                type="number"
+                placeholder="Troco para quanto? (Ex: 50)"
+                className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-green-500"
+                value={form.change}
+                onChange={(e) => setForm({ ...form, change: e.target.value })}
+              />
+            )}
+          </section>
+
+          {/* Resumo Financeiro */}
+          <div className="bg-zinc-800 p-4 rounded-2xl space-y-2">
+            <div className="flex justify-between text-zinc-400 text-sm">
+              <span>Subtotal</span>
+              <span>R$ {cartTotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-zinc-400 text-sm">
+              <span>Entrega</span>
+              <span>R$ {deliveryFee.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between text-white font-black text-xl pt-2 border-t border-white/10">
+              <span>Total</span>
+              <span>R$ {finalTotal.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <button
+            onClick={handleFinishOrder}
+            className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(22,163,74,0.4)] transition active:scale-95 flex items-center justify-center gap-2 text-lg"
+          >
+            <CheckCircle /> CONFIRMAR PEDIDO
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // --- TELA: CARRINHO (CART) ---
+  if (view === "cart") {
+    return (
+      <div className="min-h-screen bg-zinc-950 pb-20 p-4 animate-in slide-in-from-right">
+        <header className="flex items-center gap-4 mb-6 pt-4">
+          <button
+            onClick={() => setView("menu")}
+            className="bg-zinc-900 p-2 rounded-full text-white border border-white/10"
+          >
+            <ArrowRight className="rotate-180" />
+          </button>
+          <h1 className="text-xl font-black text-white">Carrinho</h1>
+        </header>
+
+        {cart.length === 0 ? (
+          <div className="text-center py-20 flex flex-col items-center">
+            <ShoppingBag size={64} className="text-zinc-700 mb-4" />
+            <p className="text-zinc-500 font-bold mb-6">
+              Sua sacola está vazia.
+            </p>
+            <button
+              onClick={() => setView("menu")}
+              className="text-yellow-500 font-bold text-sm border border-yellow-500/30 px-6 py-2 rounded-full hover:bg-yellow-500/10"
+            >
+              VER CARDÁPIO
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="space-y-3 mb-24">
+              {cart.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-zinc-900 border border-white/5 p-4 rounded-2xl flex justify-between items-start"
+                >
+                  <div>
+                    <h4 className="font-bold text-white text-sm">
+                      {item.name}
+                    </h4>
+                    {item.obs && (
+                      <p className="text-zinc-500 text-xs mt-1">
+                        Obs: "{item.obs}"
+                      </p>
+                    )}
+                    <p className="text-yellow-500 font-bold text-xs mt-2">
+                      {item.qtd}x R$ {item.price.toFixed(2)}
+                    </p>
                   </div>
-                  <div className="text-sm text-zinc-300 mb-4">
-                    {o.items.map((i) => i.name).join(", ")}
-                  </div>
-                  <OrderStatus status={o.status} />
+                  <button
+                    onClick={() => removeFromCart(item.id)}
+                    className="text-red-500 p-2 hover:bg-red-900/20 rounded-lg transition"
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               ))}
             </div>
-          )}
-        </div>
-      )}
 
-      {/* TELA PERFIL */}
-      {tab === "profile" && (
-        <div className="p-5 pt-10 text-center animate-in fade-in">
-          <div className="w-28 h-28 bg-gradient-to-tr from-zinc-800 to-zinc-900 rounded-full mx-auto mb-4 flex items-center justify-center text-zinc-500 border-4 border-zinc-950 shadow-2xl shadow-yellow-900/10">
-            <User size={48} />
-          </div>
-          <h2 className="text-2xl font-black mb-1 text-white">
-            {form.name || "Visitante"}
-          </h2>
-          <p className="text-yellow-500 text-xs font-bold tracking-widest uppercase mb-8">
-            Cliente VIP SK
-          </p>
-          <div className="bg-zinc-900/50 rounded-3xl p-6 text-left border border-white/5 space-y-6">
-            <div className="flex justify-between items-center">
-              <div className="flex items-center gap-4">
-                <div className="bg-yellow-500/10 p-3 rounded-2xl text-yellow-500">
-                  <Gift size={24} />
-                </div>
-                <div>
-                  <p className="font-bold text-sm text-white">SK Points</p>
-                  <p className="text-xs text-zinc-500">Seu saldo atual</p>
-                </div>
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-zinc-900 border-t border-white/10">
+              <div className="flex justify-between items-center mb-4">
+                <span className="text-zinc-400 font-bold">Total</span>
+                <span className="text-2xl font-black text-white">
+                  R$ {cartTotal.toFixed(2)}
+                </span>
               </div>
-              <span className="font-black text-2xl text-white">
-                {form.points}
-              </span>
+              <button
+                onClick={() => setView("checkout")}
+                className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black py-4 rounded-xl shadow-lg transition active:scale-95"
+              >
+                IR PARA PAGAMENTO
+              </button>
             </div>
+          </>
+        )}
+      </div>
+    );
+  }
+
+  // --- TELA: MENU (PADRÃO) ---
+  return (
+    <div className="min-h-screen bg-zinc-950 pb-24 text-white font-sans relative">
+      {renderModal()}
+
+      {/* HEADER FIXO */}
+      <div className="fixed top-0 left-0 right-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-white/5 pb-2">
+        <div className="p-4 flex justify-between items-center">
+          <div>
+            <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
+              Bem-vindo ao
+            </h2>
+            <h1
+              className="text-xl font-black italic tracking-tighter"
+              style={textThemeStyle}
+            >
+              {appConfig.storeName}
+            </h1>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={() => setView("history")}
+              className="bg-zinc-800 p-3 rounded-xl relative"
+            >
+              <History size={20} className="text-zinc-400" />
+            </button>
+            <button
+              onClick={onBack}
+              className="bg-zinc-800 p-3 rounded-xl text-red-500 font-bold text-xs"
+            >
+              SAIR
+            </button>
           </div>
         </div>
-      )}
 
-      {/* BOTTOM BAR */}
-      <div className="fixed bottom-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-xl border-t border-white/5 px-8 py-4 flex justify-between items-center z-50 pb-6">
-        <button
-          onClick={() => handleTabChange("menu")}
-          className={`flex flex-col items-center gap-1 transition duration-300 ${
-            tab === "menu" ? "text-yellow-500 -translate-y-1" : "text-zinc-600"
-          }`}
-        >
-          <Home size={26} strokeWidth={tab === "menu" ? 3 : 2} />
-          {tab === "menu" && (
-            <span className="w-1 h-1 rounded-full bg-yellow-500"></span>
-          )}
-        </button>
-        <button
-          onClick={() => handleTabChange("orders")}
-          className={`flex flex-col items-center gap-1 relative transition duration-300 ${
-            tab === "orders"
-              ? "text-yellow-500 -translate-y-1"
-              : "text-zinc-600"
-          }`}
-        >
-          <List size={26} strokeWidth={tab === "orders" ? 3 : 2} />
-          {myActiveOrders.filter((o) => o.status !== "delivered").length >
-            0 && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-black animate-pulse shadow-lg shadow-red-500/50"></span>
-          )}
-          {tab === "orders" && (
-            <span className="w-1 h-1 rounded-full bg-yellow-500"></span>
-          )}
-        </button>
-        <button
-          onClick={() => handleTabChange("profile")}
-          className={`flex flex-col items-center gap-1 transition duration-300 ${
-            tab === "profile"
-              ? "text-yellow-500 -translate-y-1"
-              : "text-zinc-600"
-          }`}
-        >
-          <User size={26} strokeWidth={tab === "profile" ? 3 : 2} />
-          {tab === "profile" && (
-            <span className="w-1 h-1 rounded-full bg-yellow-500"></span>
-          )}
-        </button>
+        {/* BUSCA */}
+        <div className="px-4 mb-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-3 text-zinc-500" size={18} />
+            <input
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="O que você quer comer hoje?"
+              className="w-full bg-zinc-900 border border-white/5 rounded-xl py-2.5 pl-10 text-sm text-white outline-none focus:border-yellow-500/50 transition"
+            />
+          </div>
+        </div>
+
+        {/* CATEGORIAS */}
+        <div className="px-4 flex gap-2 overflow-x-auto scrollbar-hide pb-2">
+          {["TODOS", ...categories].map((cat) => (
+            <button
+              key={cat}
+              onClick={() => setActiveCategory(cat)}
+              className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
+                activeCategory === cat
+                  ? "bg-white text-black"
+                  : "bg-zinc-900 text-zinc-400 border border-white/5"
+              }`}
+            >
+              {cat}
+            </button>
+          ))}
+        </div>
       </div>
 
-      {/* MODAL CARRINHO COM GPS */}
-      {isCartOpen && (
-        <div className="fixed inset-0 z-[60] bg-black/95 flex flex-col animate-in slide-in-from-bottom-10 backdrop-blur-xl">
-          <div className="flex justify-between items-center p-6 border-b border-white/5 bg-zinc-950">
-            <h2 className="font-black text-2xl tracking-tight">Seu Pedido</h2>
-            <button
-              onClick={() => window.history.back()}
-              className="bg-zinc-900 p-2 rounded-full hover:bg-zinc-800 transition"
-            >
-              <X size={20} />
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 space-y-6">
-            {cart.map((i, x) => (
-              <div
-                key={x}
-                className="flex justify-between items-start bg-zinc-900/50 p-4 rounded-2xl border border-white/5"
-              >
-                <div className="flex gap-3">
-                  <div className="bg-zinc-800 w-8 h-8 rounded text-xs font-bold flex items-center justify-center text-zinc-400">
-                    {i.qtd}x
-                  </div>
-                  <div>
-                    <div className="font-bold text-white text-lg leading-none mb-1">
-                      {i.name}
-                    </div>
-                    <div className="text-xs text-zinc-500 max-w-[200px] leading-relaxed">
-                      {i.details}
-                    </div>
-                  </div>
-                </div>
-                <span className="font-bold text-white">
-                  R$ {i.price.toFixed(2)}
-                </span>
-              </div>
-            ))}
-
-            <div className="bg-zinc-900/80 p-5 rounded-3xl border border-white/5 space-y-5 shadow-lg">
-              <h3 className="text-xs font-black uppercase text-zinc-500 flex items-center gap-2 tracking-widest">
-                <MapPin size={14} /> Endereço
+      {/* LISTA DE PRODUTOS */}
+      <div className="pt-44 px-4 pb-10 space-y-4">
+        {filteredMenu.map((item) => (
+          <div
+            key={item.id}
+            onClick={() => openItemModal(item)}
+            className="bg-zinc-900 border border-white/5 p-3 rounded-2xl flex gap-4 items-center active:scale-95 transition cursor-pointer"
+          >
+            <img
+              src={item.image}
+              alt={item.name}
+              className="w-24 h-24 rounded-xl object-cover bg-black"
+            />
+            <div className="flex-1">
+              <h3 className="font-bold text-white leading-tight mb-1">
+                {item.name}
               </h3>
-
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 bg-black border border-zinc-800 p-4 rounded-xl text-sm text-white"
-                  placeholder="CEP (Opcional)"
-                  value={form.cep}
-                  onChange={(e) => setForm({ ...form, cep: e.target.value })}
-                  onBlur={handleCepBlur}
-                />
-                <button
-                  onClick={handleGetLocation}
-                  className={`bg-blue-600 text-white px-4 rounded-xl font-bold flex items-center gap-2 text-xs ${
-                    isLoadingLocation ? "opacity-50" : ""
-                  }`}
-                  disabled={isLoadingLocation}
-                >
-                  {isLoadingLocation ? (
-                    "..."
-                  ) : (
-                    <>
-                      <Locate size={16} /> GPS
-                    </>
-                  )}
-                </button>
-              </div>
-
-              <input
-                className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-sm text-white outline-none"
-                placeholder="Seu Nome"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-              />
-
-              {!usingGps ? (
-                <div className="relative">
-                  <select
-                    className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-sm text-white appearance-none"
-                    onChange={(e) => {
-                      const b = bairros.find((b) => b.nome === e.target.value);
-                      if (b) {
-                        setSelectedBairro(b);
-                        setForm({ ...form, neighborhood: b.nome });
-                        setDeliveryFee(b.taxa);
-                      }
-                    }}
-                  >
-                    <option value="">Selecione o Bairro</option>
-                    {bairros.map((b) => (
-                      <option key={b.nome} value={b.nome}>
-                        {b.nome} (+ R$ {b.taxa.toFixed(2)})
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronRight
-                    className="absolute right-4 top-4 text-zinc-500 rotate-90"
-                    size={16}
-                  />
-                </div>
-              ) : (
-                <div className="bg-blue-500/10 border border-blue-500/30 p-3 rounded-xl text-xs text-blue-400 flex justify-between items-center">
-                  <span>Distância: {distanceKm.toFixed(1)} km</span>
-                  <span className="font-bold">
-                    Taxa: R$ {deliveryFee.toFixed(2)}
-                  </span>
-                </div>
-              )}
-
-              <div className="grid grid-cols-4 gap-3">
-                <input
-                  className="col-span-3 w-full bg-black border border-zinc-800 p-4 rounded-xl text-sm text-white"
-                  placeholder="Rua"
-                  value={form.street}
-                  onChange={(e) => setForm({ ...form, street: e.target.value })}
-                />
-                <input
-                  className="col-span-1 w-full bg-black border border-zinc-800 p-4 rounded-xl text-sm text-white text-center"
-                  placeholder="Nº"
-                  value={form.number}
-                  onChange={(e) => setForm({ ...form, number: e.target.value })}
-                />
-              </div>
-              <input
-                className="w-full bg-black border border-zinc-800 p-4 rounded-xl text-sm text-white"
-                placeholder="Ponto de Referência"
-                value={form.reference}
-                onChange={(e) =>
-                  setForm({ ...form, reference: e.target.value })
-                }
-              />
-
-              <div className="flex gap-3 pt-2 border-t border-white/5">
-                <input
-                  className="flex-1 bg-black border border-zinc-800 p-4 rounded-xl text-sm uppercase text-white font-mono"
-                  placeholder="CUPOM"
-                  value={couponCode}
-                  onChange={(e) => setCouponCode(e.target.value)}
-                />
-                <button
-                  onClick={applyCoupon}
-                  className="bg-zinc-800 px-6 rounded-xl font-bold text-xs hover:bg-zinc-700 transition"
-                >
-                  APLICAR
-                </button>
-              </div>
-
-              <div className="space-y-2">
-                <h3 className="text-xs font-black uppercase text-zinc-500 mt-2">
-                  Pagamento
-                </h3>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => setForm({ ...form, payment: "Pix" })}
-                    className={`flex-1 py-3 rounded-xl text-xs font-bold border ${
-                      form.payment === "Pix"
-                        ? "bg-green-500/20 border-green-500 text-green-500"
-                        : "bg-black border-zinc-800 text-zinc-500"
-                    }`}
-                  >
-                    PIX
-                  </button>
-                  <button
-                    onClick={() => setForm({ ...form, payment: "Cartão" })}
-                    className={`flex-1 py-3 rounded-xl text-xs font-bold border ${
-                      form.payment === "Cartão"
-                        ? "bg-blue-500/20 border-blue-500 text-blue-500"
-                        : "bg-black border-zinc-800 text-zinc-500"
-                    }`}
-                  >
-                    CARTÃO
-                  </button>
-                  <button
-                    onClick={() => setForm({ ...form, payment: "Dinheiro" })}
-                    className={`flex-1 py-3 rounded-xl text-xs font-bold border ${
-                      form.payment === "Dinheiro"
-                        ? "bg-yellow-500/20 border-yellow-500 text-yellow-500"
-                        : "bg-black border-zinc-800 text-zinc-500"
-                    }`}
-                  >
-                    DINHEIRO
-                  </button>
-                </div>
-              </div>
-              {form.payment === "Dinheiro" && (
-                <input
-                  className="w-full bg-black border border-yellow-500/50 p-4 rounded-xl text-sm text-white animate-in fade-in"
-                  placeholder="Troco para quanto?"
-                  value={form.change}
-                  onChange={(e) => setForm({ ...form, change: e.target.value })}
-                />
-              )}
-            </div>
-          </div>
-
-          <div className="p-6 border-t border-white/5 bg-zinc-950 pb-8">
-            <div className="flex justify-between items-end mb-6">
-              <span className="text-zinc-400 text-sm">Total com Entrega</span>
-              <div className="text-right">
-                {discount > 0 && (
-                  <span className="block text-xs text-red-500 line-through mr-1">
-                    R$ {(productsTotal + deliveryFee).toFixed(2)}
-                  </span>
-                )}
-                <span className="text-3xl font-black text-white leading-none">
-                  R$ {finalTotal.toFixed(2)}
+              <p className="text-xs text-zinc-500 line-clamp-2 mb-2">
+                {item.description}
+              </p>
+              <div className="flex items-center justify-between">
+                <span className="text-yellow-500 font-black">
+                  R$ {item.priceSolo.toFixed(2)}
                 </span>
+                <div className="bg-zinc-800 p-1.5 rounded-lg text-white">
+                  <Plus size={16} />
+                </div>
               </div>
             </div>
-            <button
-              onClick={send}
-              disabled={!isOpen}
-              style={themeStyle}
-              className="w-full text-black disabled:bg-zinc-800 disabled:text-zinc-600 py-5 rounded-2xl font-black text-lg shadow-xl shadow-yellow-500/20 hover:brightness-110 active:scale-95 transition-all flex items-center justify-center gap-2"
-            >
-              {isOpen ? (
-                <>
-                  <Bike size={20} /> ENVIAR PEDIDO
-                </>
-              ) : (
-                <>
-                  <Lock size={20} /> LOJA FECHADA
-                </>
-              )}
-            </button>
           </div>
+        ))}
+
+        {filteredMenu.length === 0 && (
+          <div className="text-center py-10 text-zinc-500 text-sm">
+            Nenhum produto encontrado.
+          </div>
+        )}
+      </div>
+
+      {/* BOTÃO FLUTUANTE DO CARRINHO */}
+      {cart.length > 0 && (
+        <div className="fixed bottom-6 left-6 right-6 z-50 animate-in slide-in-from-bottom-4">
+          <button
+            onClick={() => setView("cart")}
+            className="w-full bg-green-600 text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center font-bold hover:bg-green-500 transition"
+          >
+            <div className="flex items-center gap-3">
+              <span className="bg-black/20 w-8 h-8 flex items-center justify-center rounded-full text-sm">
+                {cart.reduce((a, b) => a + b.qtd, 0)}
+              </span>
+              <span>Ver Carrinho</span>
+            </div>
+            <span className="font-black text-lg">
+              R$ {cartTotal.toFixed(2)}
+            </span>
+          </button>
         </div>
       )}
     </div>

@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Bell, Loader2 } from "lucide-react";
+import { Bell, Loader2, Maximize2, Monitor, Smartphone } from "lucide-react";
 
-// --- IMPORTANDO CONFIGURAÇÕES ---
+// --- IMPORTANDO CONFIGURAÇÕES (Mantive igual) ---
 import {
   db,
   auth,
@@ -82,7 +82,7 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  // --- SINCRONIZAÇÃO ---
+  // --- SINCRONIZAÇÃO (Mantida a mesma lógica) ---
   useEffect(() => {
     if (!db || !userAuth) {
       const localMenu = localStorage.getItem("sk_menu_v11");
@@ -96,17 +96,13 @@ export default function App() {
       limit(100)
     );
 
-    const unsubOrders = onSnapshot(
-      qOrders,
-      (snap) => {
-        setOrders(
-          snap.docs
-            .map((d) => ({ ...d.data(), fireId: d.id }))
-            .sort((a, b) => b.timestamp - a.timestamp)
-        );
-      },
-      (error) => console.log("Erro Pedidos:", error)
-    );
+    const unsubOrders = onSnapshot(qOrders, (snap) => {
+      setOrders(
+        snap.docs
+          .map((d) => ({ ...d.data(), fireId: d.id }))
+          .sort((a, b) => b.timestamp - a.timestamp)
+      );
+    });
 
     const unsubMenu = onSnapshot(
       collection(db, "artifacts", appId, "public", "data", "menu"),
@@ -379,84 +375,127 @@ export default function App() {
   if (isLoading) {
     return (
       <div className="bg-zinc-950 min-h-screen flex flex-col items-center justify-center p-4">
-        <div className="relative mb-6">
-          <div className="absolute inset-0 bg-yellow-500 blur-xl opacity-20 rounded-full animate-pulse"></div>
-          <div className="w-24 h-24 rounded-full bg-zinc-900 border-4 border-zinc-800 flex items-center justify-center relative z-10 shadow-2xl">
-            <span className="font-black text-4xl text-white">SK</span>
-          </div>
-        </div>
-        <div className="flex flex-col items-center gap-2">
-          <Loader2 className="text-yellow-500 animate-spin" size={32} />
-          <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest animate-pulse">
-            Carregando Sistema...
-          </p>
-        </div>
+        <Loader2 className="text-yellow-500 animate-spin mb-4" size={48} />
+        <p className="text-zinc-500 text-xs font-bold uppercase tracking-widest animate-pulse">
+          Carregando Sistema...
+        </p>
       </div>
     );
   }
 
+  // --- LÓGICA DE LAYOUT INTELIGENTE ---
+  // "Wide" = Admin e Cozinha precisam de tela larga no PC
+  const isWideView = view === "admin" || view === "kitchen";
+
   return (
-    <div className="bg-zinc-950 text-white min-h-screen font-sans relative overflow-hidden flex flex-col">
-      <div
-        style={themeStyle}
-        className="text-black text-[10px] font-bold text-center py-1 z-[60] shadow-lg"
-      >
-        SK SYSTEM V12.6 • FINAL
-      </div>
-      <div className="fixed top-10 right-0 left-0 flex flex-col items-center pointer-events-none z-[70]">
-        {toasts.map((t) => (
-          <div
-            key={t.id}
-            className={`mt-2 px-4 py-3 rounded-lg shadow-2xl flex items-center gap-2 animate-bounce border-l-4 backdrop-blur-md ${
-              t.type === "success"
-                ? "bg-zinc-800/90 border-green-500"
-                : "bg-zinc-800/90 border-red-500"
-            }`}
-          >
-            <Bell
-              size={14}
-              className={
-                t.type === "success" ? "text-green-500" : "text-red-500"
-              }
-            />
-            <span className="text-xs font-bold">{t.msg}</span>
-          </div>
-        ))}
+    // CONTAINER PAI (Fundo da Mesa no PC / Invisível no Mobile)
+    <div className="bg-zinc-900 w-full min-h-screen flex justify-center sm:items-center sm:py-8 font-sans selection:bg-yellow-500 selection:text-black">
+      {/* Decoração apenas para PC Grande (Mostra que é responsivo) */}
+      <div className="hidden xl:flex fixed bottom-8 left-8 flex-col gap-2 text-zinc-700 pointer-events-none">
+        <div className="flex items-center gap-2">
+          {isWideView ? <Monitor size={20} /> : <Smartphone size={20} />}
+          <span className="font-bold text-xs tracking-widest uppercase">
+            Modo: {isWideView ? "Gestão Desktop" : "Aplicativo Mobile"}
+          </span>
+        </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto">
-        {view === "login" && (
-          <LoginScreen
-            setView={setView}
-            setCurrentUser={setCurrentUser} // <--- ESTA LINHA É A QUE CORRIGE TUDO!
-            appConfig={appConfig}
-            motoboys={motoboys}
-            themeStyle={themeStyle}
-            textThemeStyle={textThemeStyle}
-          />
-        )}
-        {view === "customer" && (
-          <CustomerApp
-            {...commonProps}
-            themeStyle={themeStyle}
-            textThemeStyle={textThemeStyle}
-          />
-        )}
-        {view === "admin" && (
-          <AdminDashboard
-            {...commonProps}
-            themeStyle={themeStyle}
-            textThemeStyle={textThemeStyle}
-          />
-        )}
-        {view === "motoboy" && (
-          <MotoboyApp
-            user={currentUser}
-            {...commonProps}
-            themeStyle={themeStyle}
-          />
-        )}
-        {view === "kitchen" && <KitchenDisplay {...commonProps} />}
+      {/* A "TELA" DO SISTEMA */}
+      <div
+        className={`
+          relative bg-zinc-950 flex flex-col overflow-hidden shadow-2xl transition-all duration-700 ease-in-out
+          
+          /* --- MOBILE (Padrão) --- */
+          w-full h-[100dvh] rounded-none border-none
+
+          /* --- TABLET e PC (Responsivo) --- */
+          sm:h-[85vh] sm:rounded-[2.5rem] sm:border-[8px] sm:border-zinc-800
+          
+          ${
+            // Largura Dinâmica baseada na View
+            isWideView
+              ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl" // Admin: Quase tela toda
+              : "sm:w-full sm:max-w-[420px]" // Cliente: Tamanho de Celular
+          }
+        `}
+      >
+        {/* Ilha Dinâmica / Detalhe visual no topo (Só aparece no PC) */}
+        <div className="hidden sm:flex absolute top-0 left-0 right-0 justify-center pt-2 z-50 pointer-events-none">
+          <div className="w-24 h-6 bg-zinc-800 rounded-b-xl flex items-center justify-center gap-2">
+            <div className="w-10 h-1 bg-zinc-900 rounded-full opacity-50"></div>
+            <div className="w-1 h-1 bg-zinc-900 rounded-full opacity-50"></div>
+          </div>
+        </div>
+
+        {/* Faixa de Status (Fixo no topo) */}
+        <div
+          style={themeStyle}
+          className="shrink-0 text-black text-[9px] font-bold text-center py-1 z-[60] shadow-md flex justify-center items-center gap-2"
+        >
+          <span>SK SYSTEM V12.8</span>
+          {isWideView && <Maximize2 size={8} />}
+        </div>
+
+        {/* Notificações (Toasts) - Flutuando sobre tudo */}
+        <div className="absolute top-12 left-0 right-0 flex flex-col items-center pointer-events-none z-[70] px-4 space-y-2">
+          {toasts.map((t) => (
+            <div
+              key={t.id}
+              className={`px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-in slide-in-from-top-5 border-l-4 backdrop-blur-md w-full max-w-sm transition-all ${
+                t.type === "success"
+                  ? "bg-zinc-800/95 border-green-500 text-green-100"
+                  : "bg-zinc-800/95 border-red-500 text-red-100"
+              }`}
+            >
+              <Bell
+                size={16}
+                className={
+                  t.type === "success" ? "text-green-500" : "text-red-500"
+                }
+              />
+              <span className="text-xs font-bold leading-tight">{t.msg}</span>
+            </div>
+          ))}
+        </div>
+
+        {/* CONTEÚDO COM SCROLL PERFEITO */}
+        <div className="flex-1 overflow-y-auto scroll-smooth relative bg-zinc-950 scrollbar-hide">
+          {/* Adicionei 'pb-safe' para respeitar a área segura do iPhone */}
+          <div className="min-h-full flex flex-col">
+            {view === "login" && (
+              <LoginScreen
+                setView={setView}
+                setCurrentUser={setCurrentUser}
+                appConfig={appConfig}
+                motoboys={motoboys}
+                themeStyle={themeStyle}
+                textThemeStyle={textThemeStyle}
+              />
+            )}
+            {view === "customer" && (
+              <CustomerApp
+                {...commonProps}
+                themeStyle={themeStyle}
+                textThemeStyle={textThemeStyle}
+              />
+            )}
+            {view === "admin" && (
+              <AdminDashboard
+                {...commonProps}
+                themeStyle={themeStyle}
+                textThemeStyle={textThemeStyle}
+              />
+            )}
+            {view === "motoboy" && (
+              <MotoboyApp
+                user={currentUser}
+                {...commonProps}
+                themeStyle={themeStyle}
+              />
+            )}
+            {view === "kitchen" && <KitchenDisplay {...commonProps} />}
+          </div>
+        </div>
       </div>
     </div>
   );

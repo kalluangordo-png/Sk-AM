@@ -509,8 +509,9 @@ export default function CustomerApp({
     <div className="min-h-screen bg-zinc-950 pb-24 text-white font-sans relative">
       {renderModal()}
 
-      {/* HEADER FIXO */}
-      <div className="fixed top-0 left-0 right-0 z-40 bg-zinc-950/90 backdrop-blur-md border-b border-white/5 pb-2">
+      {/* HEADER STICKY (GRUDENTO) - AQUI ESTÁ A CORREÇÃO! */}
+      {/* Mudamos de 'fixed' para 'sticky'. Agora ele respeita a largura do container */}
+      <div className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-white/5 pb-2">
         <div className="p-4 flex justify-between items-center">
           <div>
             <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
@@ -526,20 +527,20 @@ export default function CustomerApp({
           <div className="flex gap-2">
             <button
               onClick={() => setView("history")}
-              className="bg-zinc-800 p-3 rounded-xl relative"
+              className="bg-zinc-800 p-3 rounded-xl relative hover:bg-zinc-700 transition"
             >
               <History size={20} className="text-zinc-400" />
             </button>
             <button
               onClick={onBack}
-              className="bg-zinc-800 p-3 rounded-xl text-red-500 font-bold text-xs"
+              className="bg-zinc-800 p-3 rounded-xl text-red-500 font-bold text-xs hover:bg-zinc-700 transition"
             >
               SAIR
             </button>
           </div>
         </div>
 
-        {/* CATEGORIAS (Agora sem a busca em cima) */}
+        {/* CATEGORIAS */}
         <div className="px-4 flex gap-2 overflow-x-auto scrollbar-hide pb-2">
           {["TODOS", ...categories].map((cat) => (
             <button
@@ -548,7 +549,7 @@ export default function CustomerApp({
               className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition ${
                 activeCategory === cat
                   ? "bg-white text-black"
-                  : "bg-zinc-900 text-zinc-400 border border-white/5"
+                  : "bg-zinc-900 text-zinc-400 border border-white/5 hover:bg-zinc-800"
               }`}
             >
               {cat}
@@ -557,13 +558,14 @@ export default function CustomerApp({
         </div>
       </div>
 
-      {/* LISTA DE PRODUTOS (Padding ajustado para pt-32) */}
-      <div className="pt-32 px-4 pb-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-max">
+      {/* LISTA DE PRODUTOS */}
+      {/* Removido o 'pt-32' exagerado, agora usamos 'pt-4' pois o header é sticky e empurra o conteúdo */}
+      <div className="pt-4 px-4 pb-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-max">
         {filteredMenu.map((item) => (
           <div
             key={item.id}
             onClick={() => openItemModal(item)}
-            className="bg-zinc-900 border border-white/5 p-3 rounded-2xl flex gap-4 items-center active:scale-95 transition cursor-pointer"
+            className="bg-zinc-900 border border-white/5 p-3 rounded-2xl flex gap-4 items-center active:scale-95 transition cursor-pointer hover:border-white/20"
           >
             <img
               src={item.image}
@@ -598,10 +600,11 @@ export default function CustomerApp({
 
       {/* BOTÃO FLUTUANTE DO CARRINHO */}
       {cart.length > 0 && (
-        <div className="fixed bottom-6 left-6 right-6 z-50 animate-in slide-in-from-bottom-4">
+        <div className="fixed bottom-6 left-6 right-6 z-50 animate-in slide-in-from-bottom-4 pointer-events-none flex justify-center">
+          {/* Adicionei um wrapper para limitar a largura no PC também */}
           <button
             onClick={() => setView("cart")}
-            className="w-full bg-green-600 text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center font-bold hover:bg-green-500 transition"
+            className="w-full max-w-[400px] bg-green-600 text-white p-4 rounded-2xl shadow-2xl flex justify-between items-center font-bold hover:bg-green-500 transition pointer-events-auto"
           >
             <div className="flex items-center gap-3">
               <span className="bg-black/20 w-8 h-8 flex items-center justify-center rounded-full text-sm">

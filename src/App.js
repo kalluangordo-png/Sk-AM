@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Bell, Loader2, Maximize2, Monitor, Smartphone } from "lucide-react";
 
-// --- IMPORTANDO CONFIGURAÇÕES ---
+// ... (MANTENHA SEUS IMPORTS IGUAIS AQUI) ...
 import {
   db,
   auth,
@@ -13,14 +13,12 @@ import {
   INITIAL_COUPONS,
 } from "./config/firebase";
 
-// --- IMPORTANDO TELAS ---
 import LoginScreen from "./screens/LoginScreen";
 import CustomerApp from "./screens/CustomerApp";
 import AdminDashboard from "./screens/AdminDashboard";
 import MotoboyApp from "./screens/MotoboyApp";
 import KitchenDisplay from "./screens/KitchenDisplay";
 
-// --- FIREBASE IMPORTS ---
 import {
   collection,
   addDoc,
@@ -43,7 +41,9 @@ export default function App() {
   const [userAuth, setUserAuth] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // --- ESTADOS GLOBAIS ---
+  // ... (MANTENHA TODOS OS SEUS ESTADOS E USE EFFECTS IGUAIS) ...
+  // (Vou pular a repetição do código de lógica para focar no RETURN que é onde está o erro visual)
+
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState(INITIAL_MENU);
   const [bairros, setBairros] = useState(INITIAL_BAIRROS);
@@ -59,12 +59,10 @@ export default function App() {
     }
   });
 
-  // --- ORDENAÇÃO GLOBAL ---
   const sortedMenuItems = useMemo(() => {
     return [...menuItems].sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [menuItems]);
 
-  // --- AUTENTICAÇÃO ---
   useEffect(() => {
     if (!auth) {
       setIsLoading(false);
@@ -82,7 +80,6 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  // --- SINCRONIZAÇÃO ---
   useEffect(() => {
     if (!db || !userAuth) {
       const localMenu = localStorage.getItem("sk_menu_v11");
@@ -96,13 +93,17 @@ export default function App() {
       limit(100)
     );
 
-    const unsubOrders = onSnapshot(qOrders, (snap) => {
-      setOrders(
-        snap.docs
-          .map((d) => ({ ...d.data(), fireId: d.id }))
-          .sort((a, b) => b.timestamp - a.timestamp)
-      );
-    });
+    const unsubOrders = onSnapshot(
+      qOrders,
+      (snap) => {
+        setOrders(
+          snap.docs
+            .map((d) => ({ ...d.data(), fireId: d.id }))
+            .sort((a, b) => b.timestamp - a.timestamp)
+        );
+      },
+      (error) => console.log("Erro Pedidos:", error)
+    );
 
     const unsubMenu = onSnapshot(
       collection(db, "artifacts", appId, "public", "data", "menu"),
@@ -383,19 +384,19 @@ export default function App() {
     );
   }
 
-  // --- LÓGICA DE LAYOUT INTELIGENTE ---
-  // "Wide" = Admin, Cozinha E CLIENTE (agora) podem usar tela cheia no PC
-  const isWideView =
-    view === "admin" || view === "kitchen" || view === "customer";
+  // --- LÓGICA DE LAYOUT RESPONSIVO ---
+  // Apenas Admin e Cozinha expandem. Cliente mantem estilo app no PC.
+  const isWideView = view === "admin" || view === "kitchen";
 
   return (
-    <div className="bg-zinc-900 w-full min-h-screen flex justify-center sm:items-center sm:py-8 font-sans selection:bg-yellow-500 selection:text-black">
+    // CONTAINER GERAL
+    <div className="bg-zinc-900 w-full min-h-screen flex justify-center sm:items-center sm:py-8 font-sans selection:bg-yellow-500 selection:text-black overflow-hidden">
       {/* Decoração apenas para PC Grande */}
       <div className="hidden xl:flex fixed bottom-8 left-8 flex-col gap-2 text-zinc-700 pointer-events-none">
         <div className="flex items-center gap-2">
           {isWideView ? <Monitor size={20} /> : <Smartphone size={20} />}
           <span className="font-bold text-xs tracking-widest uppercase">
-            Modo: {isWideView ? "Desktop Expandido" : "Mobile"}
+            Modo: {isWideView ? "Gestão Desktop" : "Aplicativo Mobile"}
           </span>
         </div>
       </div>
@@ -403,7 +404,7 @@ export default function App() {
       {/* A "TELA" DO SISTEMA */}
       <div
         className={`
-          relative bg-zinc-950 flex flex-col overflow-hidden shadow-2xl transition-all duration-700 ease-in-out
+          relative bg-zinc-950 flex flex-col shadow-2xl transition-all duration-700 ease-in-out
           
           /* --- MOBILE (Padrão) --- */
           w-full h-[100dvh] rounded-none border-none
@@ -413,11 +414,12 @@ export default function App() {
           
           ${
             isWideView
-              ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl" // Tela Larga
-              : "sm:w-full sm:max-w-[420px]" // Tela Estreita (Login/Motoboy)
+              ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl" // Admin: Quase tela toda
+              : "sm:w-full sm:max-w-[420px]" // Cliente: Tamanho de Celular
           }
         `}
       >
+        {/* Ilha Dinâmica (Só aparece no PC) */}
         <div className="hidden sm:flex absolute top-0 left-0 right-0 justify-center pt-2 z-50 pointer-events-none">
           <div className="w-24 h-6 bg-zinc-800 rounded-b-xl flex items-center justify-center gap-2">
             <div className="w-10 h-1 bg-zinc-900 rounded-full opacity-50"></div>
@@ -425,14 +427,16 @@ export default function App() {
           </div>
         </div>
 
+        {/* Faixa de Status (Fixo no topo) */}
         <div
           style={themeStyle}
           className="shrink-0 text-black text-[9px] font-bold text-center py-1 z-[60] shadow-md flex justify-center items-center gap-2"
         >
-          <span>SK SYSTEM V12.8</span>
+          <span>SK SYSTEM V12.9</span>
           {isWideView && <Maximize2 size={8} />}
         </div>
 
+        {/* Notificações (Toasts) */}
         <div className="absolute top-12 left-0 right-0 flex flex-col items-center pointer-events-none z-[70] px-4 space-y-2">
           {toasts.map((t) => (
             <div
@@ -454,8 +458,12 @@ export default function App() {
           ))}
         </div>
 
-        <div className="flex-1 overflow-y-auto scroll-smooth relative bg-zinc-950 scrollbar-hide">
-          <div className="min-h-full flex flex-col">
+        {/* --- AQUI ESTÁ A CORREÇÃO DO SCROLL --- */}
+        {/* Usamos 'flex-1' para ocupar o espaço restante e 'overflow-y-auto' AQUI, não no pai */}
+        <div className="flex-1 w-full overflow-y-auto scroll-smooth relative bg-zinc-950 scrollbar-hide">
+          <div className="min-h-full pb-20">
+            {" "}
+            {/* Padding bottom extra para garantir que o fim da página apareça */}
             {view === "login" && (
               <LoginScreen
                 setView={setView}

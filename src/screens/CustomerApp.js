@@ -15,9 +15,15 @@ import {
   Square,
   Search,
   Bike,
+  MessageCircle,
+  Clock,
+  Copy,
+  Check,
+  Star,
+  Gift,
 } from "lucide-react";
 
-// --- LISTA DE ADICIONAIS (SÓ APARECE DENTRO DO LANCHE) ---
+// --- LISTA DE ADICIONAIS ---
 const EXTRAS_OPTIONS = [
   { name: "Batata Frita Individual (150g)", price: 10.0 },
   { name: "Batata SK (Cheddar e Bacon - 300g)", price: 18.0 },
@@ -25,15 +31,24 @@ const EXTRAS_OPTIONS = [
   { name: "Pote Extra de Maionese Verde (30ml)", price: 2.0 },
 ];
 
+// --- FUNÇÕES DE MÁSCARA ---
+const maskPhone = (value) => {
+  return value
+    .replace(/\D/g, "")
+    .replace(/^(\d{2})(\d)/g, "($1) $2")
+    .replace(/(\d)(\d{4})$/, "$1-$2")
+    .slice(0, 15);
+};
+
 export default function CustomerApp({
   onBack,
-  menuItems,
+  menuItems = [], // Valor padrão para evitar erro
   addOrder,
-  bairros,
-  appConfig,
-  orders,
-  myOrderIds,
-  categories,
+  bairros = [], // Valor padrão
+  appConfig = {}, // Valor padrão
+  orders = [], // Valor padrão
+  myOrderIds = [], // Valor padrão
+  categories = [], // Valor padrão
   themeStyle,
   textThemeStyle,
 }) {
@@ -41,7 +56,11 @@ export default function CustomerApp({
   const [cart, setCart] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
   const [selectedExtras, setSelectedExtras] = useState([]);
-  const [activeCategory, setActiveCategory] = useState(categories[0]);
+  // Correção: Garante que categories[0] não quebre se categories for indefinido
+  const [activeCategory, setActiveCategory] = useState(
+    categories?.[0] || "TODOS"
+  );
+  const [copiedPix, setCopiedPix] = useState(false);
 
   const [form, setForm] = useState({
     name: "",
@@ -51,16 +70,40 @@ export default function CustomerApp({
     payment: "Pix",
     change: "",
     obs: "",
+    isCondo: false,
+    rua: "",
+    numero: "",
+    cep: "",
+    referencia: "",
+    bloco: "",
+    apt: "",
+    nomeCondominio: "",
+    nucleo: "",
   });
 
+  // LÓGICA DE FIDELIDADE
+  const deliveredOrdersCount = orders.filter(
+    (o) => myOrderIds.includes(o.id) && o.status === "delivered"
+  ).length;
+
+  const loyaltyProgress = deliveredOrdersCount % 10;
+  const loyaltyRemaining = 10 - loyaltyProgress;
+  const hasReward = deliveredOrdersCount > 0 && deliveredOrdersCount % 10 === 0;
+
   const cartTotal = cart.reduce((acc, item) => acc + item.price * item.qtd, 0);
+
   const deliveryFee =
     form.bairroIndex !== "" && bairros[form.bairroIndex]
       ? parseFloat(bairros[form.bairroIndex].taxa)
       : 0;
   const finalTotal = cartTotal + deliveryFee;
 
-  // Filtra os itens do menu principal (NÃO MOSTRA OS ADICIONAIS AQUI)
+  const currentHour = new Date().getHours();
+  const isStoreOpen =
+    !appConfig.forceClose &&
+    currentHour >= (appConfig.openHour || 0) &&
+    currentHour < (appConfig.closeHour || 24);
+
   const filteredMenu = menuItems.filter((item) => {
     const matchesCategory =
       activeCategory === "TODOS" || item.category === activeCategory;
@@ -68,6 +111,12 @@ export default function CustomerApp({
   });
 
   const openItemModal = (item) => {
+    if (!isStoreOpen)
+      return alert(
+        `A loja está fechada no momento! 😢\nAbrimos às ${
+          appConfig.openHour || "18"
+        }:00.`
+      );
     setSelectedItem({ ...item, qtd: 1, obs: "", type: "solo" });
     setSelectedExtras([]);
   };
@@ -82,25 +131,29 @@ export default function CustomerApp({
 
   const addToCart = () => {
     if (!selectedItem) return;
-
     const basePrice =
       selectedItem.type === "combo"
         ? selectedItem.priceCombo
         : selectedItem.priceSolo;
     const extrasPrice = selectedExtras.reduce((acc, ex) => acc + ex.price, 0);
     const unitPrice = basePrice + extrasPrice;
-
     let finalName =
       selectedItem.type === "combo"
         ? `COMBO ${selectedItem.name}`
         : selectedItem.name;
     const extrasString = selectedExtras.map((e) => `+ ${e.name}`).join(", ");
-
     let finalObs = selectedItem.obs;
     if (extrasString) {
       finalObs = finalObs
         ? `${finalObs} | EXTRAS: ${extrasString}`
         : `EXTRAS: ${extrasString}`;
+    }
+
+    // Se o cliente tem recompensa, avisa na observação para o dono dar o desconto ou brinde
+    if (hasReward) {
+      finalObs = finalObs
+        ? `${finalObs} | 🎁 FIDELIDADE: BATATA ESPECIAL GRÁTIS`
+        : `🎁 FIDELIDADE: BATATA ESPECIAL GRÁTIS`;
     }
 
     const newItem = {
@@ -110,7 +163,6 @@ export default function CustomerApp({
       obs: finalObs,
       id: Date.now(),
     };
-
     setCart([...cart, newItem]);
     setSelectedItem(null);
   };
@@ -120,16 +172,33 @@ export default function CustomerApp({
   };
 
   const handleFinishOrder = () => {
-    if (!form.name.trim()) return alert("Por favor, digite seu nome.");
-    if (!form.address.trim()) return alert("Digite seu endereço.");
+    if (!form.name.trim()) return alert("Digite seu nome.");
+    if (form.phone.length < 14) return alert("Digite um telefone válido.");
     if (form.bairroIndex === "") return alert("Selecione seu bairro.");
-    if (cart.length === 0) return alert("Seu carrinho está vazio.");
+    if (cart.length === 0) return alert("Carrinho vazio.");
+    if (!form.rua.trim()) return alert("Digite o nome da Rua.");
+    if (!form.numero.trim()) return alert("Digite o Número.");
+    if (
+      form.isCondo &&
+      (!form.nomeCondominio.trim() || !form.bloco.trim() || !form.apt.trim())
+    )
+      return alert("Preencha os dados do condomínio.");
+
+    let addressString = "";
+    const nomeBairro = bairros[form.bairroIndex].nome;
+    if (form.isCondo)
+      addressString = `Cond. ${form.nomeCondominio}, Bl ${form.bloco}, Apt ${form.apt} - ${form.rua}, ${form.numero} - ${nomeBairro}`;
+    else {
+      const nucleoStr = form.nucleo ? ` - Núcleo ${form.nucleo}` : "";
+      addressString = `${form.rua}, ${form.numero}${nucleoStr} - ${nomeBairro}`;
+    }
+    if (form.referencia) addressString += ` | Ref: ${form.referencia}`;
 
     const newOrder = {
       customer: form.name,
       phone: form.phone,
-      address: `${form.address} - ${bairros[form.bairroIndex].nome}`,
-      bairro: bairros[form.bairroIndex].nome,
+      address: addressString,
+      bairro: nomeBairro,
       deliveryFee: deliveryFee,
       items: cart.map((i) => ({
         name: i.name,
@@ -146,14 +215,44 @@ export default function CustomerApp({
     addOrder(newOrder);
     setCart([]);
     setView("history");
-    alert("Pedido enviado com sucesso!");
+  };
+
+  const copyPix = () => {
+    if (appConfig.pixKey) {
+      navigator.clipboard.writeText(appConfig.pixKey);
+      setCopiedPix(true);
+      setTimeout(() => setCopiedPix(false), 2000);
+    } else {
+      alert("Chave Pix não cadastrada. Peça ao atendente.");
+    }
+  };
+
+  const sendToWhatsApp = (order) => {
+    const itemsList = order.items
+      .map((i) => `• ${i.qtd}x ${i.name}`)
+      .join("\n");
+    const text = `*NOVO PEDIDO SK BURGERS* 🍔\n\n*Cliente:* ${
+      order.customer
+    }\n*Pedido #:* ${
+      order.id.split("-")[1]
+    }\n\n${itemsList}\n\n*Total:* R$ ${order.total.toFixed(2)}\n*Pagamento:* ${
+      order.payment
+    }\n*Endereço:* ${order.address}`;
+    // Tenta pegar do config, se não tiver usa padrão
+    const phone = appConfig.whatsapp || "5592999999999";
+    const url = `https://wa.me/${phone}?text=${encodeURIComponent(text)}`;
+    window.open(url, "_blank");
   };
 
   const ItemCard = ({ item }) => (
     <div
       key={item.id}
       onClick={() => openItemModal(item)}
-      className="bg-zinc-900 border border-white/5 p-3 rounded-2xl flex gap-4 items-center active:scale-95 transition cursor-pointer hover:border-white/20"
+      className={`bg-zinc-900 border border-white/5 p-3 rounded-2xl flex gap-4 items-center transition cursor-pointer ${
+        isStoreOpen
+          ? "hover:border-white/20 active:scale-95"
+          : "opacity-50 grayscale"
+      }`}
     >
       <img
         src={item.image}
@@ -169,8 +268,12 @@ export default function CustomerApp({
           <span className="text-yellow-500 font-black">
             R$ {item.priceSolo.toFixed(2)}
           </span>
-          <div className="bg-zinc-800 p-1.5 rounded-lg text-white">
-            <Plus size={16} />
+          <div
+            className={`p-1.5 rounded-lg text-white ${
+              isStoreOpen ? "bg-zinc-800" : "bg-zinc-800/50"
+            }`}
+          >
+            {isStoreOpen ? <Plus size={16} /> : <X size={16} />}
           </div>
         </div>
       </div>
@@ -195,7 +298,6 @@ export default function CustomerApp({
           >
             <X size={20} />
           </button>
-
           <div className="shrink-0 h-48 w-full relative">
             <img
               src={selectedItem.image}
@@ -204,7 +306,6 @@ export default function CustomerApp({
             />
             <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent"></div>
           </div>
-
           <div className="p-5 overflow-y-auto space-y-5 scrollbar-hide">
             <div>
               <h3 className="text-2xl font-black text-white leading-none">
@@ -214,7 +315,6 @@ export default function CustomerApp({
                 {selectedItem.description}
               </p>
             </div>
-
             {selectedItem.priceCombo > 0 && (
               <div className="bg-black p-1 rounded-xl flex shrink-0">
                 <button
@@ -243,8 +343,6 @@ export default function CustomerApp({
                 </button>
               </div>
             )}
-
-            {/* AQUI ESTÃO OS ADICIONAIS (Só aparecem dentro do modal) */}
             <div className="bg-zinc-800/50 p-3 rounded-xl border border-white/5">
               <h4 className="text-yellow-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
                 <Plus size={12} /> Turbinar seu pedido?
@@ -286,7 +384,6 @@ export default function CustomerApp({
                 })}
               </div>
             </div>
-
             <div>
               <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
                 Observações
@@ -301,7 +398,6 @@ export default function CustomerApp({
               />
             </div>
           </div>
-
           <div className="p-4 bg-zinc-900 border-t border-white/5 mt-auto">
             <div className="flex items-center gap-4">
               <div className="flex items-center bg-black rounded-xl border border-white/10 h-12">
@@ -378,9 +474,9 @@ export default function CustomerApp({
                       : "bg-zinc-700 text-zinc-300"
                   }`}
                 >
-                  {order.status === "preparing" && "Em Preparo"}{" "}
-                  {order.status === "ready" && "Saiu p/ Entrega"}{" "}
-                  {order.status === "delivering" && "Motoboy a Caminho"}{" "}
+                  {order.status === "preparing" && "Em Preparo"}
+                  {order.status === "ready" && "Saiu p/ Entrega"}
+                  {order.status === "delivering" && "Motoboy a Caminho"}
                   {order.status === "delivered" && "Entregue"}
                 </div>
                 <div className="text-xs text-zinc-500 mb-2">
@@ -395,12 +491,18 @@ export default function CustomerApp({
                     </div>
                   ))}
                 </div>
-                <div className="border-t border-white/5 pt-2 flex justify-between items-center">
+                <div className="border-t border-white/5 pt-2 flex justify-between items-center mb-2">
                   <span className="text-xs text-zinc-500">Total Pago</span>
                   <span className="font-black text-white">
                     R$ {order.total.toFixed(2)}
                   </span>
                 </div>
+                <button
+                  onClick={() => sendToWhatsApp(order)}
+                  className="w-full bg-green-600/20 hover:bg-green-600/30 text-green-500 border border-green-500/50 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"
+                >
+                  <MessageCircle size={14} /> Enviar Comprovante no Zap
+                </button>
               </div>
             ))}
           </div>
@@ -428,23 +530,26 @@ export default function CustomerApp({
             </h3>
             <input
               placeholder="Seu Nome"
-              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white mb-2 outline-none focus:border-yellow-500"
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-yellow-500"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}
             />
             <input
               placeholder="Telefone / WhatsApp"
-              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-yellow-500"
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-yellow-500"
               value={form.phone}
-              onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, phone: maskPhone(e.target.value) })
+              }
+              maxLength={15}
             />
           </section>
           <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5 space-y-3">
-            <h3 className="text-blue-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+            <h3 className="text-blue-500 font-bold text-xs uppercase flex items-center gap-2">
               <MapPin size={14} /> Entrega
             </h3>
             <select
-              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white mb-2 outline-none"
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none"
               value={form.bairroIndex}
               onChange={(e) =>
                 setForm({ ...form, bairroIndex: e.target.value })
@@ -457,37 +562,156 @@ export default function CustomerApp({
                 </option>
               ))}
             </select>
+            <div className="flex bg-black p-1 rounded-xl border border-white/10">
+              <button
+                onClick={() => setForm({ ...form, isCondo: false })}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold flex justify-center items-center gap-2 transition ${
+                  !form.isCondo ? "bg-zinc-800 text-white" : "text-zinc-500"
+                }`}
+              >
+                <Home size={14} /> CASA
+              </button>
+              <button
+                onClick={() => setForm({ ...form, isCondo: true })}
+                className={`flex-1 py-2 rounded-lg text-xs font-bold flex justify-center items-center gap-2 transition ${
+                  form.isCondo ? "bg-blue-600 text-white" : "text-zinc-500"
+                }`}
+              >
+                <Building size={14} /> CONDOMÍNIO
+              </button>
+            </div>
+            {form.isCondo ? (
+              <div className="grid grid-cols-2 gap-2 animate-in fade-in">
+                <input
+                  placeholder="Nome do Condomínio"
+                  className="col-span-2 w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500"
+                  value={form.nomeCondominio}
+                  onChange={(e) =>
+                    setForm({ ...form, nomeCondominio: e.target.value })
+                  }
+                />
+                <input
+                  placeholder="Bloco / Torre"
+                  className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500"
+                  value={form.bloco}
+                  onChange={(e) => setForm({ ...form, bloco: e.target.value })}
+                />
+                <input
+                  placeholder="Apartamento"
+                  className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500"
+                  value={form.apt}
+                  onChange={(e) => setForm({ ...form, apt: e.target.value })}
+                />
+              </div>
+            ) : (
+              <div className="animate-in fade-in">
+                <input
+                  placeholder="Núcleo (Ex: Núcleo 4)"
+                  className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500"
+                  value={form.nucleo}
+                  onChange={(e) => setForm({ ...form, nucleo: e.target.value })}
+                />
+              </div>
+            )}
+            <div className="grid grid-cols-3 gap-2">
+              <input
+                placeholder="Rua"
+                className="col-span-2 w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500"
+                value={form.rua}
+                onChange={(e) => setForm({ ...form, rua: e.target.value })}
+              />
+              <input
+                placeholder="Nº"
+                className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500"
+                value={form.numero}
+                onChange={(e) => setForm({ ...form, numero: e.target.value })}
+              />
+            </div>
             <input
-              placeholder="Rua, Número e Complemento"
-              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-blue-500"
-              value={form.address}
-              onChange={(e) => setForm({ ...form, address: e.target.value })}
+              placeholder="CEP"
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500"
+              value={form.cep}
+              onChange={(e) => setForm({ ...form, cep: e.target.value })}
+            />
+            <input
+              placeholder="Ponto de Referência"
+              className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm outline-none focus:border-blue-500"
+              value={form.referencia}
+              onChange={(e) => setForm({ ...form, referencia: e.target.value })}
             />
           </section>
-          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
-            <h3 className="text-green-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5 space-y-3">
+            <h3 className="text-green-500 font-bold text-xs uppercase flex items-center gap-2">
               <Receipt size={14} /> Pagamento
             </h3>
-            <div className="flex gap-2 mb-3">
-              {["Pix", "Cartão", "Dinheiro"].map((method) => (
-                <button
-                  key={method}
-                  onClick={() => setForm({ ...form, payment: method })}
-                  className={`flex-1 py-2 rounded-lg text-xs font-bold border transition ${
-                    form.payment === method
-                      ? "bg-green-600 border-green-600 text-white"
-                      : "bg-black border-white/10 text-zinc-400"
-                  }`}
-                >
-                  {method}
-                </button>
-              ))}
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                onClick={() => setForm({ ...form, payment: "Pix" })}
+                className={`py-3 rounded-lg text-xs font-bold border transition ${
+                  form.payment === "Pix"
+                    ? "bg-green-600 border-green-600 text-white"
+                    : "bg-black border-white/10 text-zinc-400"
+                }`}
+              >
+                Pix
+              </button>
+              <button
+                onClick={() => setForm({ ...form, payment: "Crédito" })}
+                className={`py-3 rounded-lg text-xs font-bold border transition ${
+                  form.payment === "Crédito"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-black border-white/10 text-zinc-400"
+                }`}
+              >
+                Cartão Crédito
+              </button>
+              <button
+                onClick={() => setForm({ ...form, payment: "Débito" })}
+                className={`py-3 rounded-lg text-xs font-bold border transition ${
+                  form.payment === "Débito"
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-black border-white/10 text-zinc-400"
+                }`}
+              >
+                Cartão Débito
+              </button>
+              <button
+                onClick={() => setForm({ ...form, payment: "Dinheiro" })}
+                className={`py-3 rounded-lg text-xs font-bold border transition ${
+                  form.payment === "Dinheiro"
+                    ? "bg-yellow-600 border-yellow-600 text-white"
+                    : "bg-black border-white/10 text-zinc-400"
+                }`}
+              >
+                Dinheiro
+              </button>
             </div>
+            {form.payment === "Pix" && (
+              <div className="bg-green-900/20 border border-green-500/30 p-3 rounded-xl animate-in slide-in-from-top-2">
+                <p className="text-zinc-400 text-xs mb-1">Chave Pix da Loja:</p>
+                <div className="flex gap-2">
+                  <div className="bg-black flex-1 p-2 rounded border border-white/10 text-sm font-mono text-white truncate">
+                    {appConfig.pixKey || "Chave não cadastrada"}
+                  </div>
+                  <button
+                    onClick={copyPix}
+                    className="bg-green-600 px-3 rounded text-white hover:bg-green-500 transition"
+                  >
+                    {copiedPix ? <Check size={16} /> : <Copy size={16} />}
+                  </button>
+                </div>
+                {copiedPix && (
+                  <p className="text-green-500 text-[10px] mt-1 font-bold">
+                    Copiado!
+                  </p>
+                )}
+              </div>
+            )}
             {form.payment === "Dinheiro" && (
               <input
                 type="number"
                 placeholder="Troco para quanto? (Ex: 50)"
-                className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-green-500"
+                className="w-full bg-black border border-white/10 rounded-xl p-3 text-white outline-none focus:border-green-500 animate-in slide-in-from-top-2"
                 value={form.change}
                 onChange={(e) => setForm({ ...form, change: e.target.value })}
               />
@@ -521,8 +745,6 @@ export default function CustomerApp({
   return (
     <div className="min-h-screen bg-zinc-950 pb-24 text-white font-sans relative">
       {renderModal()}
-
-      {/* HEADER STICKY COM LOGO LIMPA E NÚCLEO VERDE */}
       <div className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-white/5 pb-2">
         <div className="p-4 flex justify-between items-center">
           <div className="flex items-center gap-3">
@@ -538,7 +760,6 @@ export default function CustomerApp({
               </div>
             </div>
           </div>
-
           <div className="flex gap-2">
             <button
               onClick={() => setView("history")}
@@ -554,7 +775,6 @@ export default function CustomerApp({
             </button>
           </div>
         </div>
-
         <div className="px-4 flex gap-2 overflow-x-auto scrollbar-hide pb-2">
           {["TODOS", ...categories].map((cat) => (
             <button
@@ -572,7 +792,6 @@ export default function CustomerApp({
         </div>
       </div>
 
-      {/* BANNER */}
       <div className="px-4 pt-4 animate-in slide-in-from-top-5">
         <div className="relative h-44 rounded-3xl overflow-hidden shadow-2xl border border-white/10 group">
           <img
@@ -592,14 +811,65 @@ export default function CustomerApp({
               ENTREGA <br />
               <span className="text-yellow-500">GRÁTIS</span>
             </h3>
-            <p className="text-zinc-300 text-xs font-bold mt-1 max-w-[180px] leading-tight drop-shadow-md">
-              Até 3km em pedidos acima de R$ 35,00
-            </p>
+            <div className="flex items-center gap-2">
+              <p className="text-zinc-300 text-xs font-bold mt-1 max-w-[180px] leading-tight drop-shadow-md">
+                Até 3km em pedidos acima de R$ 35,00
+              </p>
+              <div className="bg-black/60 backdrop-blur-md border border-white/10 px-3 py-1 rounded-full flex items-center gap-1 text-xs text-yellow-400 font-bold animate-pulse">
+                <Clock size={12} /> {appConfig.deliveryTime || "40-50 min"}
+              </div>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* LISTA DE PRODUTOS (ORGANIZADA POR SEÇÕES) */}
+      {/* --- BARRA DE FIDELIDADE --- */}
+      <div className="px-4 mt-4 animate-in slide-in-from-top-7">
+        <div className="bg-zinc-900 border border-white/10 p-3 rounded-xl flex items-center justify-between shadow-lg">
+          <div>
+            <h3 className="text-yellow-500 font-black text-xs uppercase flex items-center gap-1 mb-1">
+              <Star size={12} fill="#EAB308" /> Fidelidade SK
+            </h3>
+            <p className="text-zinc-400 text-[10px] leading-tight">
+              Peça 10, ganhe <strong>uma Batata Grande ou Especial!</strong>{" "}
+              <br />
+              <span className="text-white font-bold">
+                Você tem {loyaltyProgress} pontos.
+              </span>{" "}
+              Faltam {loyaltyRemaining}.
+            </p>
+          </div>
+          <div className="flex gap-1">
+            {[...Array(10)].map((_, i) => (
+              <div
+                key={i}
+                className={`w-1.5 h-6 rounded-full transition-all duration-500 ${
+                  i < loyaltyProgress
+                    ? "bg-yellow-500 shadow-[0_0_10px_#EAB308]"
+                    : "bg-zinc-800"
+                }`}
+              ></div>
+            ))}
+          </div>
+          {hasReward && (
+            <div className="absolute top-0 right-0 -mt-2 -mr-2 bg-red-500 text-white p-2 rounded-full shadow-lg animate-bounce">
+              <Gift size={16} />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {!isStoreOpen && (
+        <div className="mx-4 mt-4 bg-red-500/20 border border-red-500/50 p-3 rounded-xl text-center">
+          <p className="text-red-500 font-black text-sm uppercase">
+            Loja Fechada Agora
+          </p>
+          <p className="text-xs text-zinc-400">
+            Abrimos às {appConfig.openHour}:00
+          </p>
+        </div>
+      )}
+
       <div className="pt-4 px-4 pb-10">
         {activeCategory === "TODOS" ? (
           categories.map((cat) => {
@@ -633,8 +903,6 @@ export default function CustomerApp({
           </div>
         )}
       </div>
-
-      {/* BOTÃO FLUTUANTE */}
       {cart.length > 0 && (
         <div className="fixed bottom-6 left-6 right-6 z-50 animate-in slide-in-from-bottom-4 pointer-events-none flex justify-center">
           <button

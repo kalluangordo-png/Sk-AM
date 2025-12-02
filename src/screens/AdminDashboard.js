@@ -26,7 +26,11 @@ import {
   Settings,
   AlertTriangle,
   QrCode,
-  Bike, // <--- O ÍCONE QUE FALTAVA ESTÁ AQUI
+  Bike,
+  MessageCircle,
+  Send,
+  Star, // Ícone para a aba de Adicionais
+  ListPlus, // Ícone de lista
 } from "lucide-react";
 
 const compressImage = (file, callback) => {
@@ -81,6 +85,11 @@ export default function AdminDashboard({
   updateMenuItem,
   addMenuItem,
   deleteMenuItem,
+  // Props dos Extras (Vem do App.js)
+  extras = [],
+  addExtra,
+  deleteExtra,
+  // Outras props
   bairros,
   setBairros,
   appConfig,
@@ -104,6 +113,9 @@ export default function AdminDashboard({
     discount: "",
     type: "fixed",
   });
+
+  // Form de Adicional (Novo)
+  const [newExtra, setNewExtra] = useState({ name: "", price: "" });
 
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -174,6 +186,26 @@ export default function AdminDashboard({
     return matchesSearch && matchesCategory;
   });
 
+  // --- FUNÇÕES DE AÇÃO ---
+  const sendQuickMessage = (order, type) => {
+    if (!order.phone) return alert("Cliente sem telefone cadastrado.");
+    const cleanPhone = order.phone.replace(/\D/g, "");
+    let message = "";
+    if (type === "confirm") {
+      message = `Olá *${
+        order.customer
+      }*! Recebemos seu pedido no SK Burgers.🍔\nJá estamos preparando! O tempo estimado é de *${
+        appConfig.deliveryTime || "40-50 min"
+      }*.`;
+    } else if (type === "dispatch") {
+      message = `Olá *${order.customer}*! Seu pedido saiu para entrega 🛵💨\nFique atento ao interfone/campainha. Bom apetite!`;
+    }
+    window.open(
+      `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`,
+      "_blank"
+    );
+  };
+
   const moveItem = (index, direction) => {
     if (menuSearch !== "") return alert("Limpe a busca para ordenar.");
     const itemToMove = filteredMenu[index];
@@ -192,6 +224,25 @@ export default function AdminDashboard({
       window.confirm(`Tem certeza que deseja apagar "${name}" do cardápio?`)
     ) {
       deleteMenuItem(id);
+    }
+  };
+
+  // --- FUNÇÕES DE ADICIONAIS (EXTRAS) ---
+  const handleAddExtra = () => {
+    if (newExtra.name && newExtra.price) {
+      addExtra({
+        name: newExtra.name,
+        price: parseFloat(newExtra.price),
+        available: true,
+        id: Date.now().toString(), // ID temporário, Firebase sobrescreve
+      });
+      setNewExtra({ name: "", price: "" });
+    }
+  };
+
+  const handleDeleteExtra = (id) => {
+    if (window.confirm("Apagar este adicional permanentemente?")) {
+      deleteExtra(id);
     }
   };
 
@@ -364,7 +415,11 @@ export default function AdminDashboard({
           <Smartphone size={10} /> PIX
         </span>
       );
-    if (payment.includes("Crédito") || payment.includes("Débito"))
+    if (
+      payment.includes("Crédito") ||
+      payment.includes("Débito") ||
+      payment.includes("Cartão")
+    )
       return (
         <span className="text-[9px] bg-blue-900/30 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30 flex items-center gap-1 w-fit">
           <CreditCard size={10} /> CARTÃO
@@ -415,7 +470,7 @@ export default function AdminDashboard({
       </header>
 
       <div className="flex gap-2 mt-6 mb-6 overflow-x-auto pb-2 scrollbar-hide">
-        {["orders", "reports", "menu", "config"].map((t) => (
+        {["orders", "reports", "menu", "extras", "config"].map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -431,6 +486,8 @@ export default function AdminDashboard({
               ? "Financeiro"
               : t === "menu"
               ? "Cardápio"
+              : t === "extras"
+              ? "Adicionais"
               : "Config"}
           </button>
         ))}
@@ -460,6 +517,7 @@ export default function AdminDashboard({
           </div>
 
           <div className="flex flex-nowrap overflow-x-auto gap-4 pb-4 snap-x snap-mandatory md:grid md:grid-cols-2 lg:grid-cols-4">
+            {/* --- COZINHA --- */}
             <div className="min-w-[85vw] md:min-w-0 snap-center space-y-3">
               <div className="flex justify-between items-center border-b border-white/10 pb-3 sticky top-0 bg-zinc-950 z-10">
                 <h3 className="text-red-500 text-xs font-black uppercase flex items-center gap-2">
@@ -515,14 +573,13 @@ export default function AdminDashboard({
                     >
                       <Printer size={18} />
                     </button>
+                    {/* BOTÃO DE ZAP (Confirmar Pedido) */}
                     {o.phone && (
                       <button
-                        onClick={() =>
-                          window.open(`https://wa.me/${o.phone}`, "_blank")
-                        }
+                        onClick={() => sendQuickMessage(o, "confirm")}
                         className="bg-green-500/10 text-green-500 border border-green-500/50 p-2.5 rounded-lg hover:bg-green-500/20 transition"
                       >
-                        <Settings size={18} />
+                        <MessageCircle size={18} />
                       </button>
                     )}
                     <button
@@ -535,6 +592,8 @@ export default function AdminDashboard({
                 </div>
               ))}
             </div>
+
+            {/* --- PRONTOS --- */}
             <div className="min-w-[85vw] md:min-w-0 snap-center space-y-3">
               <div className="flex justify-between items-center border-b border-white/10 pb-3 sticky top-0 bg-zinc-950 z-10">
                 <h3 className="text-yellow-500 text-xs font-black uppercase flex items-center gap-2">
@@ -555,6 +614,15 @@ export default function AdminDashboard({
                   <div className="text-xs text-zinc-500 mb-4 truncate flex items-center gap-1">
                     <Flag size={10} /> {o.address}
                   </div>
+                  {/* BOTÃO DE ZAP (Saiu para Entrega) */}
+                  {o.phone && (
+                    <button
+                      onClick={() => sendQuickMessage(o, "dispatch")}
+                      className="w-full mb-2 bg-yellow-600/20 hover:bg-yellow-600/30 text-yellow-500 border border-yellow-500/50 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-2 transition"
+                    >
+                      <Send size={12} /> Avisar: Saiu p/ Entrega
+                    </button>
+                  )}
                   <div className="grid grid-cols-2 gap-2">
                     {motoboys.map((m) => (
                       <button
@@ -574,6 +642,7 @@ export default function AdminDashboard({
                 </div>
               ))}
             </div>
+
             <div className="min-w-[85vw] md:min-w-0 snap-center space-y-3">
               <div className="flex justify-between items-center border-b border-white/10 pb-3 sticky top-0 bg-zinc-950 z-10">
                 <h3 className="text-blue-500 text-xs font-black uppercase flex items-center gap-2">
@@ -884,8 +953,99 @@ export default function AdminDashboard({
         </div>
       )}
 
+      {/* --- ABA DE ADICIONAIS (EXTRAS) --- */}
+      {tab === "extras" && (
+        <div className="space-y-6 animate-in fade-in">
+          <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
+            <h3 className="text-white font-bold text-sm mb-4 flex items-center gap-2">
+              <Star size={16} /> Gerenciar Adicionais
+            </h3>
+
+            {/* Formulário de Adição */}
+            <div className="flex gap-2 mb-4">
+              <input
+                className="flex-1 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
+                placeholder="Nome (Ex: Bacon Extra)"
+                value={newExtra.name}
+                onChange={(e) =>
+                  setNewExtra({ ...newExtra, name: e.target.value })
+                }
+              />
+              <input
+                className="w-24 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
+                type="number"
+                placeholder="R$ Preço"
+                value={newExtra.price}
+                onChange={(e) =>
+                  setNewExtra({ ...newExtra, price: e.target.value })
+                }
+              />
+              <button
+                onClick={handleAddExtra}
+                className="bg-blue-600 p-3 rounded-lg text-white hover:bg-blue-500"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+
+            {/* Lista de Adicionais */}
+            <div className="space-y-2">
+              {extras.length === 0 ? (
+                <p className="text-zinc-500 text-xs text-center py-4">
+                  Nenhum adicional cadastrado.
+                </p>
+              ) : (
+                extras.map((extra) => (
+                  <div
+                    key={extra.id}
+                    className="flex justify-between items-center bg-black p-3 rounded-lg border border-white/5"
+                  >
+                    <div>
+                      <div className="text-white font-bold text-sm">
+                        {extra.name}
+                      </div>
+                      <div className="text-yellow-500 text-xs font-black">
+                        R$ {extra.price.toFixed(2)}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleDeleteExtra(extra.id)}
+                      className="text-zinc-600 hover:text-red-500 p-2"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {tab === "config" && (
         <div className="space-y-6 animate-in fade-in">
+          {/* --- CONFIGURAÇÃO TEMPO DE ENTREGA (NOVO) --- */}
+          <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
+            <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+              <Clock size={16} /> Tempo Estimado de Entrega
+            </h3>
+            <div className="space-y-2">
+              <input
+                className="w-full bg-black p-3 rounded-lg border border-white/10 text-white text-sm"
+                placeholder="Ex: 40-50 min"
+                value={appConfig.deliveryTime || ""}
+                onChange={(e) =>
+                  saveGlobalSettings({
+                    config: { ...appConfig, deliveryTime: e.target.value },
+                  })
+                }
+              />
+              <p className="text-[10px] text-zinc-500">
+                Esse tempo aparecerá para o cliente no cardápio.
+              </p>
+            </div>
+          </div>
+
           <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
             <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
               <QrCode size={16} /> Chave Pix da Loja

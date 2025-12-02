@@ -35,6 +35,18 @@ import {
 } from "firebase/firestore";
 import { signInAnonymously, onAuthStateChanged } from "firebase/auth";
 
+// Adicionais Iniciais (Caso não tenha no banco ainda)
+const INITIAL_EXTRAS = [
+  { name: "Batata Frita Individual (150g)", price: 10.0, available: true },
+  { name: "Batata SK (Cheddar e Bacon - 300g)", price: 18.0, available: true },
+  {
+    name: "Adicional de Smash (Carne 70g + Queijo)",
+    price: 6.0,
+    available: true,
+  },
+  { name: "Pote Extra de Maionese Verde (30ml)", price: 2.0, available: true },
+];
+
 export default function App() {
   const [view, setView] = useState("login");
   const [currentUser, setCurrentUser] = useState(null);
@@ -47,14 +59,15 @@ export default function App() {
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState(INITIAL_MENU);
   const [bairros, setBairros] = useState(INITIAL_BAIRROS);
-
   const [appConfig, setAppConfig] = useState({
     ...INITIAL_CONFIG,
     storeName: "Burgers",
   });
-
   const [motoboys, setMotoboys] = useState(INITIAL_MOTOBOYS);
   const [coupons, setCoupons] = useState(INITIAL_COUPONS);
+
+  // NOVO ESTADO: ADICIONAIS
+  const [extras, setExtras] = useState(INITIAL_EXTRAS);
 
   const [myOrderIds, setMyOrderIds] = useState(() => {
     try {
@@ -85,6 +98,7 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
+  // --- SINCRONIZAÇÃO ---
   useEffect(() => {
     if (!db || !userAuth) {
       const localMenu = localStorage.getItem("sk_menu_v13");
@@ -98,17 +112,13 @@ export default function App() {
       limit(100)
     );
 
-    const unsubOrders = onSnapshot(
-      qOrders,
-      (snap) => {
-        setOrders(
-          snap.docs
-            .map((d) => ({ ...d.data(), fireId: d.id }))
-            .sort((a, b) => b.timestamp - a.timestamp)
-        );
-      },
-      (error) => console.log("Erro Pedidos:", error)
-    );
+    const unsubOrders = onSnapshot(qOrders, (snap) => {
+      setOrders(
+        snap.docs
+          .map((d) => ({ ...d.data(), fireId: d.id }))
+          .sort((a, b) => b.timestamp - a.timestamp)
+      );
+    });
 
     const unsubMenu = onSnapshot(
       collection(db, "artifacts", appId, "public", "data", "menu"),
@@ -129,6 +139,25 @@ export default function App() {
       }
     );
 
+    // --- NOVA SINCRONIZAÇÃO: ADICIONAIS (EXTRAS) ---
+    const unsubExtras = onSnapshot(
+      collection(db, "artifacts", appId, "public", "data", "extras"),
+      (snap) => {
+        if (!snap.empty) {
+          const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
+          setExtras(data);
+        } else if (isOnline) {
+          INITIAL_EXTRAS.forEach((i) =>
+            addDoc(
+              collection(db, "artifacts", appId, "public", "data", "extras"),
+              i
+            )
+          );
+          setExtras(INITIAL_EXTRAS);
+        }
+      }
+    );
+
     const unsubConfig = onSnapshot(
       doc(
         db,
@@ -143,13 +172,12 @@ export default function App() {
         if (snap.exists()) {
           const data = snap.data();
           if (data.bairros) setBairros(data.bairros);
-          if (data.config) {
+          if (data.config)
             setAppConfig({
               ...INITIAL_CONFIG,
               ...data.config,
               storeName: "Burgers",
             });
-          }
           if (data.motoboys) setMotoboys(data.motoboys);
           if (data.coupons) setCoupons(data.coupons);
         } else if (isOnline) {
@@ -178,6 +206,7 @@ export default function App() {
       unsubOrders();
       unsubMenu();
       unsubConfig();
+      unsubExtras(); // Limpa listener de extras
     };
   }, [userAuth]);
 
@@ -359,9 +388,16 @@ export default function App() {
       deleteOrder,
       showToast,
       menuItems: sortedMenuItems,
+      // Funções de Menu
       addMenuItem: (i) => safeDbOp("menu", i),
       updateMenuItem: (id, u) => safeDbOp("menu", u, "update", id),
       deleteMenuItem: (id) => safeDbOp("menu", null, "delete", id),
+      // Funções de Extras (Adicionais) - NOVA
+      extras, // Passando a lista de extras para as telas
+      addExtra: (i) => safeDbOp("extras", i),
+      updateExtra: (id, u) => safeDbOp("extras", u, "update", id),
+      deleteExtra: (id) => safeDbOp("extras", null, "delete", id),
+      // Configs Gerais
       bairros,
       setBairros,
       appConfig,
@@ -378,8 +414,17 @@ export default function App() {
         "BEBIDAS",
       ],
     }),
-    [orders, sortedMenuItems, bairros, appConfig, motoboys, coupons, myOrderIds]
-  );
+    [
+      orders,
+      sortedMenuItems,
+      bairros,
+      appConfig,
+      motoboys,
+      coupons,
+      myOrderIds,
+      extras,
+    ]
+  ); // Adicionei 'extras' nas dependências
 
   const themeStyle = { backgroundColor: appConfig.themeColor || "#EAB308" };
   const textThemeStyle = { color: appConfig.themeColor || "#EAB308" };
@@ -410,16 +455,11 @@ export default function App() {
       </div>
 
       <div
-        className={`
-          relative bg-zinc-950 flex flex-col shadow-2xl transition-all duration-700 ease-in-out
-          w-full h-[100dvh] rounded-none border-none
-          sm:h-[85vh] sm:rounded-[2.5rem] sm:border-[8px] sm:border-zinc-800
-          ${
-            isWideView
-              ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl"
-              : "sm:w-full sm:max-w-[420px]"
-          }
-        `}
+        className={`relative bg-zinc-950 flex flex-col shadow-2xl transition-all duration-700 ease-in-out w-full h-[100dvh] rounded-none border-none sm:h-[85vh] sm:rounded-[2.5rem] sm:border-[8px] sm:border-zinc-800 ${
+          isWideView
+            ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl"
+            : "sm:w-full sm:max-w-[420px]"
+        }`}
       >
         <div className="hidden sm:flex absolute top-0 left-0 right-0 justify-center pt-2 z-50 pointer-events-none">
           <div className="w-24 h-6 bg-zinc-800 rounded-b-xl flex items-center justify-center gap-2">
@@ -427,8 +467,6 @@ export default function App() {
             <div className="w-1 h-1 bg-zinc-900 rounded-full opacity-50"></div>
           </div>
         </div>
-
-        {/* --- TOPO LIMPO: NENHUMA FAIXA DE VERSÃO AQUI --- */}
 
         <div className="absolute top-12 left-0 right-0 flex flex-col items-center pointer-events-none z-[70] px-4 space-y-2">
           {toasts.map((t) => (

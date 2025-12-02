@@ -9,8 +9,6 @@ import {
   Edit,
   Palette,
   Clock,
-  Power,
-  Map,
   Bike,
   DollarSign,
   TrendingUp,
@@ -28,7 +26,9 @@ import {
   ToggleRight,
   Ticket,
   Settings,
-  AlertTriangle, // Ícone de Alerta
+  AlertTriangle,
+  MapPin,
+  Users,
 } from "lucide-react";
 
 // Compressão de imagem
@@ -51,7 +51,7 @@ const compressImage = (file, callback) => {
   };
 };
 
-// Componente de Timer para o Admin
+// Timer Badge
 const OrderTimerBadge = ({ timestamp }) => {
   const [minutes, setMinutes] = useState(0);
   useEffect(() => {
@@ -86,7 +86,7 @@ export default function AdminDashboard({
   addMenuItem,
   deleteMenuItem,
   bairros,
-  setBairros,
+  setBairros, // Importante: Se não vier via prop, o saveGlobalSettings resolve
   appConfig,
   saveGlobalSettings,
   motoboys,
@@ -100,9 +100,12 @@ export default function AdminDashboard({
   const [menuSearch, setMenuSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("TODOS");
 
-  // Forms
+  // --- FORMS ---
   const [newBairro, setNewBairro] = useState({ nome: "", taxa: "" });
+
+  // ESTADO DO NOVO MOTOBOY
   const [newMoto, setNewMoto] = useState({ name: "", login: "" });
+
   const [newCoupon, setNewCoupon] = useState({
     code: "",
     discount: "",
@@ -122,7 +125,6 @@ export default function AdminDashboard({
     order: 0,
   });
 
-  // Configuração Local de Impressão
   const [printerWidth, setPrinterWidth] = useState(
     localStorage.getItem("sk_printer_width") || "58mm"
   );
@@ -130,7 +132,7 @@ export default function AdminDashboard({
     localStorage.setItem("sk_printer_width", printerWidth);
   }, [printerWidth]);
 
-  // --- DASHBOARD METRICS ---
+  // --- METRICS ---
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
 
@@ -161,7 +163,7 @@ export default function AdminDashboard({
   const ready = orders.filter((o) => o.status === "ready");
   const delivering = orders.filter((o) => o.status === "delivering");
 
-  // --- MENU ---
+  // --- MENU SORTING ---
   const sortedMenu = useMemo(() => {
     return [...menuItems].sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [menuItems]);
@@ -189,19 +191,15 @@ export default function AdminDashboard({
   };
 
   // --- ACTIONS ---
-  // *** FUNÇÃO DE LIMPEZA TOTAL ***
   const clearSystem = () => {
     const confirm1 = window.confirm(
-      "⚠️ PERIGO: Isso vai apagar TODOS os pedidos do histórico, cozinha e motoboys.\n\nTem certeza que deseja ZERAR o sistema?"
+      "⚠️ PERIGO: Isso vai apagar TODOS os pedidos do histórico.\n\nTem certeza?"
     );
     if (confirm1) {
-      const confirm2 = window.confirm(
-        "Última chance: Essa ação não pode ser desfeita.\n\nDeseja realmente apagar tudo?"
-      );
+      const confirm2 = window.confirm("Última chance: Apagar tudo?");
       if (confirm2) {
-        // Apaga todos os pedidos
         orders.forEach((o) => deleteOrder(o.id));
-        alert("Sistema zerado com sucesso! 🗑️✨");
+        alert("Sistema zerado!");
       }
     }
   };
@@ -291,7 +289,7 @@ export default function AdminDashboard({
       );
   };
 
-  // DB Wrappers
+  // --- DB WRAPPERS ---
   const addBairro = () => {
     if (newBairro.nome) {
       saveGlobalSettings({
@@ -303,17 +301,22 @@ export default function AdminDashboard({
       setNewBairro({ nome: "", taxa: "" });
     }
   };
+
   const removeBairro = (n) =>
     saveGlobalSettings({ bairros: bairros.filter((b) => b.nome !== n) });
 
+  // --- FUNÇÕES MOTOBOY ---
   const addMotoboy = () => {
-    if (newMoto.name) {
+    if (newMoto.name && newMoto.login) {
       saveGlobalSettings({
         motoboys: [...motoboys, { ...newMoto, id: Date.now() }],
       });
       setNewMoto({ name: "", login: "" });
+    } else {
+      alert("Preencha Nome e Login do motoboy.");
     }
   };
+
   const removeMotoboy = (id) =>
     saveGlobalSettings({ motoboys: motoboys.filter((m) => m.id !== id) });
 
@@ -332,10 +335,11 @@ export default function AdminDashboard({
       setNewCoupon({ code: "", discount: "", type: "fixed" });
     }
   };
+
   const removeCoupon = (code) =>
     saveGlobalSettings({ coupons: coupons.filter((c) => c.code !== code) });
 
-  // Products
+  // --- PRODUCTS ---
   const openNewProduct = () => {
     setEditingId(null);
     setProdForm({
@@ -350,6 +354,7 @@ export default function AdminDashboard({
     });
     setShowProductForm(true);
   };
+
   const openEditProduct = (item) => {
     setEditingId(item.id);
     setProdForm({
@@ -360,6 +365,7 @@ export default function AdminDashboard({
     });
     setShowProductForm(true);
   };
+
   const handleSaveProduct = () => {
     const payload = {
       ...prodForm,
@@ -378,7 +384,7 @@ export default function AdminDashboard({
     setShowProductForm(false);
   };
 
-  // UI Components
+  // --- UI COMPONENTS ---
   const PaymentIcon = ({ payment }) => {
     if (!payment) return null;
     if (payment.includes("Pix"))
@@ -422,7 +428,7 @@ export default function AdminDashboard({
 
   return (
     <div className="p-4 pt-16 min-h-screen bg-zinc-950 font-sans text-white selection:bg-yellow-500 selection:text-black">
-      <header className="fixed top-0 left-0 right-0 bg-zinc-950/90 backdrop-blur-md border-b border-white/10 p-4 flex justify-between items-center z-40">
+      <header className="fixed top-0 left-0 right-0 bg-zinc-950/80 backdrop-blur-xl border-b border-white/5 p-4 px-6 flex justify-between items-center z-40 mt-7">
         <h1
           style={textThemeStyle}
           className="font-black flex items-center gap-2 text-lg"
@@ -558,11 +564,6 @@ export default function AdminDashboard({
                   </div>
                 </div>
               ))}
-              {prep.length === 0 && (
-                <div className="text-zinc-700 text-xs text-center py-10 border-2 border-dashed border-zinc-900 rounded-2xl">
-                  Cozinha vazia 👨‍🍳
-                </div>
-              )}
             </div>
 
             {/* PRONTOS */}
@@ -584,7 +585,7 @@ export default function AdminDashboard({
                     </span>
                   </div>
                   <div className="text-xs text-zinc-500 mb-4 truncate flex items-center gap-1">
-                    <Map size={10} /> {o.address}
+                    <MapPin size={10} /> {o.address}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {motoboys.map((m) => (
@@ -920,6 +921,61 @@ export default function AdminDashboard({
 
       {tab === "config" && (
         <div className="space-y-6 animate-in fade-in">
+          {/* --- GESTÃO DE MOTOBOYS (NOVA SEÇÃO) --- */}
+          <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
+            <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+              <Users size={16} /> Equipe de Entregas (Motoboys)
+            </h3>
+            <div className="space-y-2 mb-3">
+              {motoboys &&
+                motoboys.map((m) => (
+                  <div
+                    key={m.id}
+                    className="flex justify-between items-center bg-black p-2 rounded-lg border border-white/5"
+                  >
+                    <div>
+                      <span className="text-blue-400 font-black text-xs">
+                        {m.name}
+                      </span>
+                      <span className="text-zinc-500 text-[10px] ml-2">
+                        Login: {m.login}
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => removeMotoboy(m.id)}
+                      className="text-red-500 hover:text-white"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
+                placeholder="Nome (Ex: João)"
+                value={newMoto.name}
+                onChange={(e) =>
+                  setNewMoto({ ...newMoto, name: e.target.value })
+                }
+              />
+              <input
+                className="w-24 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
+                placeholder="Login"
+                value={newMoto.login}
+                onChange={(e) =>
+                  setNewMoto({ ...newMoto, login: e.target.value })
+                }
+              />
+              <button
+                onClick={addMotoboy}
+                className="bg-blue-600 p-3 rounded-lg text-white hover:bg-blue-500"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          </div>
+
           <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
             <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
               <Ticket size={16} /> Cupons de Desconto
@@ -987,7 +1043,61 @@ export default function AdminDashboard({
             </div>
           </div>
 
-          {/* --- CONFIGURAÇÕES DIVERSAS --- */}
+          {/* --- CONFIGURAÇÕES DE BAIRROS (NOVO) --- */}
+          <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
+            <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
+              <MapPin size={16} /> Taxas de Entrega
+            </h3>
+            <div className="space-y-2 mb-3 max-h-40 overflow-y-auto scrollbar-hide">
+              {bairros.map((b, idx) => (
+                <div
+                  key={idx}
+                  className="flex justify-between items-center bg-black p-2 rounded-lg border border-white/5"
+                >
+                  <div>
+                    <span className="text-white font-bold text-xs">
+                      {b.nome}
+                    </span>
+                    <span className="text-green-500 text-[10px] ml-2">
+                      R$ {b.taxa.toFixed(2)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={() => removeBairro(b.nome)}
+                    className="text-red-500 hover:text-white"
+                  >
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                className="flex-1 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
+                placeholder="Nome do Bairro"
+                value={newBairro.nome}
+                onChange={(e) =>
+                  setNewBairro({ ...newBairro, nome: e.target.value })
+                }
+              />
+              <input
+                className="w-20 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
+                type="number"
+                placeholder="R$"
+                value={newBairro.taxa}
+                onChange={(e) =>
+                  setNewBairro({ ...newBairro, taxa: e.target.value })
+                }
+              />
+              <button
+                onClick={addBairro}
+                className="bg-blue-600 p-3 rounded-lg text-white hover:bg-blue-500"
+              >
+                <Plus size={16} />
+              </button>
+            </div>
+          </div>
+
           <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
             <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
               <Settings size={16} /> Impressão
@@ -1047,7 +1157,6 @@ export default function AdminDashboard({
             </div>
           </div>
 
-          {/* --- ZONA DE PERIGO (NOVO) --- */}
           <div className="bg-red-900/20 p-4 rounded-xl border border-red-500/30 mt-4">
             <h3 className="text-red-500 font-black text-sm mb-3 flex items-center gap-2 uppercase tracking-widest">
               <AlertTriangle size={16} /> Zona de Perigo

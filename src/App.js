@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
-import { Bell, Loader2, Maximize2, Monitor, Smartphone } from "lucide-react";
+import { Bell, Loader2, Monitor, Smartphone } from "lucide-react";
 
 // --- IMPORTANDO CONFIGURAÇÕES ---
 import {
@@ -48,7 +48,6 @@ export default function App() {
   const [menuItems, setMenuItems] = useState(INITIAL_MENU);
   const [bairros, setBairros] = useState(INITIAL_BAIRROS);
 
-  // FORÇANDO O NOME "BURGERS" NA INICIALIZAÇÃO
   const [appConfig, setAppConfig] = useState({
     ...INITIAL_CONFIG,
     storeName: "Burgers",
@@ -59,19 +58,16 @@ export default function App() {
 
   const [myOrderIds, setMyOrderIds] = useState(() => {
     try {
-      // ATUALIZADO PARA V4 PARA LIMPAR CACHE ANTIGO DE PEDIDOS
       return JSON.parse(localStorage.getItem("sk_my_order_ids_v4")) || [];
     } catch {
       return [];
     }
   });
 
-  // --- ORDENAÇÃO GLOBAL ---
   const sortedMenuItems = useMemo(() => {
     return [...menuItems].sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [menuItems]);
 
-  // --- AUTENTICAÇÃO ---
   useEffect(() => {
     if (!auth) {
       setIsLoading(false);
@@ -89,10 +85,8 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
-  // --- SINCRONIZAÇÃO ---
   useEffect(() => {
     if (!db || !userAuth) {
-      // --- CORREÇÃO DE CACHE AQUI: Mudamos de v11 para v13 ---
       const localMenu = localStorage.getItem("sk_menu_v13");
       if (localMenu) setMenuItems(JSON.parse(localMenu));
       return;
@@ -122,7 +116,6 @@ export default function App() {
         if (!snap.empty) {
           const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
           setMenuItems(data);
-          // --- CORREÇÃO DE CACHE AQUI TAMBÉM: Salva como v13 ---
           localStorage.setItem("sk_menu_v13", JSON.stringify(data));
         } else if (isOnline) {
           INITIAL_MENU.forEach((i) =>
@@ -150,7 +143,6 @@ export default function App() {
         if (snap.exists()) {
           const data = snap.data();
           if (data.bairros) setBairros(data.bairros);
-
           if (data.config) {
             setAppConfig({
               ...INITIAL_CONFIG,
@@ -158,7 +150,6 @@ export default function App() {
               storeName: "Burgers",
             });
           }
-
           if (data.motoboys) setMotoboys(data.motoboys);
           if (data.coupons) setCoupons(data.coupons);
         } else if (isOnline) {
@@ -191,7 +182,6 @@ export default function App() {
   }, [userAuth]);
 
   useEffect(() => {
-    // ATUALIZADO PARA V4
     localStorage.setItem("sk_my_order_ids_v4", JSON.stringify(myOrderIds));
   }, [myOrderIds]);
 
@@ -405,7 +395,6 @@ export default function App() {
     );
   }
 
-  // --- LÓGICA DE LAYOUT INTELIGENTE ---
   const isWideView =
     view === "admin" || view === "kitchen" || view === "customer";
 
@@ -423,13 +412,8 @@ export default function App() {
       <div
         className={`
           relative bg-zinc-950 flex flex-col shadow-2xl transition-all duration-700 ease-in-out
-          
-          /* --- MOBILE (Padrão) --- */
           w-full h-[100dvh] rounded-none border-none
-
-          /* --- TABLET e PC (Responsivo) --- */
           sm:h-[85vh] sm:rounded-[2.5rem] sm:border-[8px] sm:border-zinc-800
-          
           ${
             isWideView
               ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl"
@@ -444,13 +428,7 @@ export default function App() {
           </div>
         </div>
 
-        <div
-          style={themeStyle}
-          className="shrink-0 text-black text-[9px] font-bold text-center py-1 z-[60] shadow-md flex justify-center items-center gap-2"
-        >
-          <span>SYSTEM V13.0</span>
-          {isWideView && <Maximize2 size={8} />}
-        </div>
+        {/* --- TOPO LIMPO: NENHUMA FAIXA DE VERSÃO AQUI --- */}
 
         <div className="absolute top-12 left-0 right-0 flex flex-col items-center pointer-events-none z-[70] px-4 space-y-2">
           {toasts.map((t) => (

@@ -14,9 +14,10 @@ import {
   CheckSquare,
   Square,
   Search,
+  Bike,
 } from "lucide-react";
 
-// --- LISTA DE ADICIONAIS ---
+// --- LISTA DE ADICIONAIS (SÓ APARECE DENTRO DO LANCHE) ---
 const EXTRAS_OPTIONS = [
   { name: "Batata Frita Individual (150g)", price: 10.0 },
   { name: "Batata SK (Cheddar e Bacon - 300g)", price: 18.0 },
@@ -38,14 +39,10 @@ export default function CustomerApp({
 }) {
   const [view, setView] = useState("menu");
   const [cart, setCart] = useState([]);
-
-  // Estado do Modal
   const [selectedItem, setSelectedItem] = useState(null);
-  const [selectedExtras, setSelectedExtras] = useState([]); // Novos adicionais selecionados
-
+  const [selectedExtras, setSelectedExtras] = useState([]);
   const [activeCategory, setActiveCategory] = useState(categories[0]);
 
-  // --- ESTADOS DO FORMULÁRIO DE CHECKOUT ---
   const [form, setForm] = useState({
     name: "",
     phone: "",
@@ -56,27 +53,23 @@ export default function CustomerApp({
     obs: "",
   });
 
-  // --- CALCULA TOTAIS ---
   const cartTotal = cart.reduce((acc, item) => acc + item.price * item.qtd, 0);
-
   const deliveryFee =
     form.bairroIndex !== "" && bairros[form.bairroIndex]
       ? parseFloat(bairros[form.bairroIndex].taxa)
       : 0;
-
   const finalTotal = cartTotal + deliveryFee;
 
-  // --- FILTRO DO MENU ---
+  // Filtra os itens do menu principal (NÃO MOSTRA OS ADICIONAIS AQUI)
   const filteredMenu = menuItems.filter((item) => {
     const matchesCategory =
       activeCategory === "TODOS" || item.category === activeCategory;
     return matchesCategory && item.available;
   });
 
-  // --- FUNÇÕES DO CARRINHO ---
   const openItemModal = (item) => {
     setSelectedItem({ ...item, qtd: 1, obs: "", type: "solo" });
-    setSelectedExtras([]); // Limpa adicionais ao abrir
+    setSelectedExtras([]);
   };
 
   const toggleExtra = (extra) => {
@@ -90,28 +83,19 @@ export default function CustomerApp({
   const addToCart = () => {
     if (!selectedItem) return;
 
-    // Preço base (Solo ou Combo)
     const basePrice =
       selectedItem.type === "combo"
         ? selectedItem.priceCombo
         : selectedItem.priceSolo;
-
-    // Soma o preço dos adicionais
     const extrasPrice = selectedExtras.reduce((acc, ex) => acc + ex.price, 0);
-
-    // Preço Final da Unidade
     const unitPrice = basePrice + extrasPrice;
 
-    // Monta o nome com os adicionais para aparecer na cozinha
     let finalName =
       selectedItem.type === "combo"
         ? `COMBO ${selectedItem.name}`
         : selectedItem.name;
-
-    // Adiciona os extras ao nome ou observação para a cozinha ver
     const extrasString = selectedExtras.map((e) => `+ ${e.name}`).join(", ");
 
-    // Se tiver extras, junta na observação do item
     let finalObs = selectedItem.obs;
     if (extrasString) {
       finalObs = finalObs
@@ -122,8 +106,8 @@ export default function CustomerApp({
     const newItem = {
       ...selectedItem,
       name: finalName,
-      price: unitPrice, // O preço salvo já inclui os extras
-      obs: finalObs, // Observação atualizada com os extras
+      price: unitPrice,
+      obs: finalObs,
       id: Date.now(),
     };
 
@@ -135,7 +119,6 @@ export default function CustomerApp({
     setCart(cart.filter((i) => i.id !== itemId));
   };
 
-  // --- FINALIZAR PEDIDO ---
   const handleFinishOrder = () => {
     if (!form.name.trim()) return alert("Por favor, digite seu nome.");
     if (!form.address.trim()) return alert("Digite seu endereço.");
@@ -163,10 +146,37 @@ export default function CustomerApp({
     addOrder(newOrder);
     setCart([]);
     setView("history");
-    alert("Pedido enviado com sucesso! Acompanhe o status.");
+    alert("Pedido enviado com sucesso!");
   };
 
-  // --- MODAL DE PRODUTO ---
+  const ItemCard = ({ item }) => (
+    <div
+      key={item.id}
+      onClick={() => openItemModal(item)}
+      className="bg-zinc-900 border border-white/5 p-3 rounded-2xl flex gap-4 items-center active:scale-95 transition cursor-pointer hover:border-white/20"
+    >
+      <img
+        src={item.image}
+        alt={item.name}
+        className="w-24 h-24 rounded-xl object-cover bg-black"
+      />
+      <div className="flex-1">
+        <h3 className="font-bold text-white leading-tight mb-1">{item.name}</h3>
+        <p className="text-xs text-zinc-500 line-clamp-2 mb-2">
+          {item.description}
+        </p>
+        <div className="flex items-center justify-between">
+          <span className="text-yellow-500 font-black">
+            R$ {item.priceSolo.toFixed(2)}
+          </span>
+          <div className="bg-zinc-800 p-1.5 rounded-lg text-white">
+            <Plus size={16} />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+
   const renderModal = () => {
     if (!selectedItem) return null;
     const isCombo = selectedItem.type === "combo";
@@ -179,7 +189,6 @@ export default function CustomerApp({
     return (
       <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
         <div className="bg-zinc-900 w-full max-w-md rounded-3xl overflow-hidden border border-white/10 shadow-2xl relative flex flex-col max-h-[90vh]">
-          {/* Botão Fechar */}
           <button
             onClick={() => setSelectedItem(null)}
             className="absolute top-3 right-3 bg-black/50 p-2 rounded-full text-white z-20"
@@ -187,7 +196,6 @@ export default function CustomerApp({
             <X size={20} />
           </button>
 
-          {/* Imagem (Fica fixa no topo) */}
           <div className="shrink-0 h-48 w-full relative">
             <img
               src={selectedItem.image}
@@ -197,9 +205,7 @@ export default function CustomerApp({
             <div className="absolute inset-0 bg-gradient-to-t from-zinc-900 to-transparent"></div>
           </div>
 
-          {/* Conteúdo com Scroll */}
           <div className="p-5 overflow-y-auto space-y-5 scrollbar-hide">
-            {/* Título e Descrição */}
             <div>
               <h3 className="text-2xl font-black text-white leading-none">
                 {selectedItem.name}
@@ -209,7 +215,6 @@ export default function CustomerApp({
               </p>
             </div>
 
-            {/* Seleção Combo/Solo */}
             {selectedItem.priceCombo > 0 && (
               <div className="bg-black p-1 rounded-xl flex shrink-0">
                 <button
@@ -239,7 +244,7 @@ export default function CustomerApp({
               </div>
             )}
 
-            {/* --- SEÇÃO DE ADICIONAIS (NOVA) --- */}
+            {/* AQUI ESTÃO OS ADICIONAIS (Só aparecem dentro do modal) */}
             <div className="bg-zinc-800/50 p-3 rounded-xl border border-white/5">
               <h4 className="text-yellow-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
                 <Plus size={12} /> Turbinar seu pedido?
@@ -282,14 +287,13 @@ export default function CustomerApp({
               </div>
             </div>
 
-            {/* Observações */}
             <div>
               <label className="text-xs font-bold text-zinc-500 uppercase ml-1">
-                Observações do Lanche
+                Observações
               </label>
               <textarea
                 className="w-full bg-black border border-white/10 rounded-xl p-3 text-white text-sm mt-1 outline-none focus:border-yellow-500 transition h-20 resize-none"
-                placeholder="Ex: Sem cebola, ponto da carne..."
+                placeholder="Ex: Sem cebola..."
                 value={selectedItem.obs}
                 onChange={(e) =>
                   setSelectedItem({ ...selectedItem, obs: e.target.value })
@@ -298,7 +302,6 @@ export default function CustomerApp({
             </div>
           </div>
 
-          {/* Footer Fixo: Quantidade e Botão Adicionar */}
           <div className="p-4 bg-zinc-900 border-t border-white/5 mt-auto">
             <div className="flex items-center gap-4">
               <div className="flex items-center bg-black rounded-xl border border-white/10 h-12">
@@ -309,7 +312,7 @@ export default function CustomerApp({
                       qtd: Math.max(1, prev.qtd - 1),
                     }))
                   }
-                  className="px-4 h-full text-zinc-400 hover:text-white transition"
+                  className="px-4 h-full text-zinc-400 hover:text-white"
                 >
                   <Minus size={18} />
                 </button>
@@ -318,17 +321,13 @@ export default function CustomerApp({
                 </span>
                 <button
                   onClick={() =>
-                    setSelectedItem((prev) => ({
-                      ...prev,
-                      qtd: prev.qtd + 1,
-                    }))
+                    setSelectedItem((prev) => ({ ...prev, qtd: prev.qtd + 1 }))
                   }
-                  className="px-4 h-full text-zinc-400 hover:text-white transition"
+                  className="px-4 h-full text-zinc-400 hover:text-white"
                 >
                   <Plus size={18} />
                 </button>
               </div>
-
               <button
                 onClick={addToCart}
                 className="flex-1 h-12 bg-green-600 hover:bg-green-500 text-white font-black rounded-xl flex justify-between px-4 items-center shadow-lg active:scale-95 transition"
@@ -343,10 +342,8 @@ export default function CustomerApp({
     );
   };
 
-  // --- TELA: HISTÓRICO ---
   if (view === "history") {
     const myHistory = orders.filter((o) => myOrderIds.includes(o.id));
-
     return (
       <div className="min-h-screen bg-zinc-950 pb-20 p-4">
         <header className="flex items-center gap-4 mb-6 pt-4">
@@ -358,7 +355,6 @@ export default function CustomerApp({
           </button>
           <h1 className="text-xl font-black text-white">Meus Pedidos</h1>
         </header>
-
         {myHistory.length === 0 ? (
           <div className="text-center py-20 opacity-50">
             <Receipt size={64} className="mx-auto mb-4 text-zinc-600" />
@@ -372,8 +368,7 @@ export default function CustomerApp({
                 className="bg-zinc-900 border border-white/5 rounded-2xl p-4 relative overflow-hidden"
               >
                 <div
-                  className={`absolute top-0 right-0 px-3 py-1 text-[10px] font-black uppercase rounded-bl-xl
-                  ${
+                  className={`absolute top-0 right-0 px-3 py-1 text-[10px] font-black uppercase rounded-bl-xl ${
                     order.status === "ready"
                       ? "bg-yellow-500 text-black"
                       : order.status === "delivering"
@@ -383,12 +378,11 @@ export default function CustomerApp({
                       : "bg-zinc-700 text-zinc-300"
                   }`}
                 >
-                  {order.status === "preparing" && "Em Preparo"}
-                  {order.status === "ready" && "Saiu p/ Entrega"}
-                  {order.status === "delivering" && "Motoboy a Caminho"}
+                  {order.status === "preparing" && "Em Preparo"}{" "}
+                  {order.status === "ready" && "Saiu p/ Entrega"}{" "}
+                  {order.status === "delivering" && "Motoboy a Caminho"}{" "}
                   {order.status === "delivered" && "Entregue"}
                 </div>
-
                 <div className="text-xs text-zinc-500 mb-2">
                   #{order.id.split("-")[1]} •{" "}
                   {new Date(order.timestamp).toLocaleDateString()}
@@ -398,11 +392,6 @@ export default function CustomerApp({
                     <div key={idx} className="text-sm text-zinc-300">
                       <span className="font-bold text-white">{i.qtd}x</span>{" "}
                       {i.name}
-                      {i.details && (
-                        <div className="text-xs text-zinc-500 pl-4 border-l border-zinc-700 mt-1">
-                          {i.details}
-                        </div>
-                      )}
                     </div>
                   ))}
                 </div>
@@ -420,7 +409,6 @@ export default function CustomerApp({
     );
   }
 
-  // --- TELA: CHECKOUT ---
   if (view === "checkout") {
     return (
       <div className="min-h-screen bg-zinc-950 pb-20 p-4 animate-in slide-in-from-right">
@@ -433,9 +421,8 @@ export default function CustomerApp({
           </button>
           <h1 className="text-xl font-black text-white">Finalizar Pedido</h1>
         </header>
-
         <div className="space-y-4">
-          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
+          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5 space-y-3">
             <h3 className="text-yellow-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
               <ChefHat size={14} /> Seus Dados
             </h3>
@@ -452,8 +439,7 @@ export default function CustomerApp({
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
           </section>
-
-          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
+          <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5 space-y-3">
             <h3 className="text-blue-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
               <MapPin size={14} /> Entrega
             </h3>
@@ -478,7 +464,6 @@ export default function CustomerApp({
               onChange={(e) => setForm({ ...form, address: e.target.value })}
             />
           </section>
-
           <section className="bg-zinc-900 p-4 rounded-2xl border border-white/5">
             <h3 className="text-green-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
               <Receipt size={14} /> Pagamento
@@ -508,7 +493,6 @@ export default function CustomerApp({
               />
             )}
           </section>
-
           <div className="bg-zinc-800 p-4 rounded-2xl space-y-2">
             <div className="flex justify-between text-zinc-400 text-sm">
               <span>Subtotal</span>
@@ -523,7 +507,6 @@ export default function CustomerApp({
               <span>R$ {finalTotal.toFixed(2)}</span>
             </div>
           </div>
-
           <button
             onClick={handleFinishOrder}
             className="w-full bg-green-600 hover:bg-green-500 text-white font-black py-4 rounded-2xl shadow-[0_0_20px_rgba(22,163,74,0.4)] transition active:scale-95 flex items-center justify-center gap-2 text-lg"
@@ -535,103 +518,27 @@ export default function CustomerApp({
     );
   }
 
-  // --- TELA: CARRINHO (CART) ---
-  if (view === "cart") {
-    return (
-      <div className="min-h-screen bg-zinc-950 pb-20 p-4 animate-in slide-in-from-right">
-        <header className="flex items-center gap-4 mb-6 pt-4">
-          <button
-            onClick={() => setView("menu")}
-            className="bg-zinc-900 p-2 rounded-full text-white border border-white/10"
-          >
-            <ArrowRight className="rotate-180" />
-          </button>
-          <h1 className="text-xl font-black text-white">Carrinho</h1>
-        </header>
-
-        {cart.length === 0 ? (
-          <div className="text-center py-20 flex flex-col items-center">
-            <ShoppingBag size={64} className="text-zinc-700 mb-4" />
-            <p className="text-zinc-500 font-bold mb-6">
-              Sua sacola está vazia.
-            </p>
-            <button
-              onClick={() => setView("menu")}
-              className="text-yellow-500 font-bold text-sm border border-yellow-500/30 px-6 py-2 rounded-full hover:bg-yellow-500/10"
-            >
-              VER CARDÁPIO
-            </button>
-          </div>
-        ) : (
-          <>
-            <div className="space-y-3 mb-24">
-              {cart.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-zinc-900 border border-white/5 p-4 rounded-2xl flex justify-between items-start"
-                >
-                  <div>
-                    <h4 className="font-bold text-white text-sm">
-                      {item.name}
-                    </h4>
-                    {item.obs && (
-                      <p className="text-zinc-500 text-xs mt-1 max-w-[200px] leading-relaxed">
-                        {item.obs}
-                      </p>
-                    )}
-                    <p className="text-yellow-500 font-bold text-xs mt-2">
-                      {item.qtd}x R$ {item.price.toFixed(2)}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => removeFromCart(item.id)}
-                    className="text-red-500 p-2 hover:bg-red-900/20 rounded-lg transition"
-                  >
-                    <Trash2 size={18} />
-                  </button>
-                </div>
-              ))}
-            </div>
-
-            <div className="fixed bottom-0 left-0 right-0 p-4 bg-zinc-900 border-t border-white/10">
-              <div className="flex justify-between items-center mb-4">
-                <span className="text-zinc-400 font-bold">Total</span>
-                <span className="text-2xl font-black text-white">
-                  R$ {cartTotal.toFixed(2)}
-                </span>
-              </div>
-              <button
-                onClick={() => setView("checkout")}
-                className="w-full bg-yellow-500 hover:bg-yellow-400 text-black font-black py-4 rounded-xl shadow-lg transition active:scale-95"
-              >
-                IR PARA PAGAMENTO
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-    );
-  }
-
-  // --- TELA: MENU (PADRÃO) ---
   return (
     <div className="min-h-screen bg-zinc-950 pb-24 text-white font-sans relative">
       {renderModal()}
 
-      {/* HEADER STICKY */}
+      {/* HEADER STICKY COM LOGO LIMPA E NÚCLEO VERDE */}
       <div className="sticky top-0 z-40 bg-zinc-950/95 backdrop-blur-md border-b border-white/5 pb-2">
         <div className="p-4 flex justify-between items-center">
-          <div>
-            <h2 className="text-xs font-bold text-zinc-500 uppercase tracking-widest">
-              Bem-vindo ao
-            </h2>
-            <h1
-              className="text-xl font-black italic tracking-tighter"
-              style={textThemeStyle}
-            >
-              {appConfig.storeName}
-            </h1>
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col">
+              <h1 className="text-2xl font-black text-white tracking-tighter leading-none">
+                <span className="text-yellow-500">SK</span> BURGERS
+              </h1>
+              <div className="flex items-center gap-1 mt-0.5">
+                <MapPin size={10} className="text-green-500" />
+                <span className="text-[10px] font-bold uppercase tracking-wide text-green-500">
+                  Núcleo 16
+                </span>
+              </div>
+            </div>
           </div>
+
           <div className="flex gap-2">
             <button
               onClick={() => setView("history")}
@@ -648,7 +555,6 @@ export default function CustomerApp({
           </div>
         </div>
 
-        {/* CATEGORIAS */}
         <div className="px-4 flex gap-2 overflow-x-auto scrollbar-hide pb-2">
           {["TODOS", ...categories].map((cat) => (
             <button
@@ -666,46 +572,69 @@ export default function CustomerApp({
         </div>
       </div>
 
-      {/* LISTA DE PRODUTOS */}
-      <div className="pt-4 px-4 pb-10 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-max">
-        {filteredMenu.map((item) => (
-          <div
-            key={item.id}
-            onClick={() => openItemModal(item)}
-            className="bg-zinc-900 border border-white/5 p-3 rounded-2xl flex gap-4 items-center active:scale-95 transition cursor-pointer hover:border-white/20"
-          >
-            <img
-              src={item.image}
-              alt={item.name}
-              className="w-24 h-24 rounded-xl object-cover bg-black"
-            />
-            <div className="flex-1">
-              <h3 className="font-bold text-white leading-tight mb-1">
-                {item.name}
-              </h3>
-              <p className="text-xs text-zinc-500 line-clamp-2 mb-2">
-                {item.description}
-              </p>
-              <div className="flex items-center justify-between">
-                <span className="text-yellow-500 font-black">
-                  R$ {item.priceSolo.toFixed(2)}
-                </span>
-                <div className="bg-zinc-800 p-1.5 rounded-lg text-white">
-                  <Plus size={16} />
+      {/* BANNER */}
+      <div className="px-4 pt-4 animate-in slide-in-from-top-5">
+        <div className="relative h-44 rounded-3xl overflow-hidden shadow-2xl border border-white/10 group">
+          <img
+            src="https://images.unsplash.com/photo-1571091718767-18b5b1457add?w=800&q=80"
+            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+            alt="Banner Burger"
+          />
+          <div className="absolute inset-0 bg-gradient-to-r from-black via-black/70 to-transparent"></div>
+          <div className="absolute inset-0 p-6 flex flex-col justify-center items-start">
+            <span className="bg-yellow-500 text-black text-[10px] font-black px-2 py-1 rounded mb-2 shadow-lg tracking-widest">
+              PROMOÇÃO
+            </span>
+            <h3
+              className="text-4xl font-black text-white leading-none italic tracking-tighter mb-2"
+              style={{ textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}
+            >
+              ENTREGA <br />
+              <span className="text-yellow-500">GRÁTIS</span>
+            </h3>
+            <p className="text-zinc-300 text-xs font-bold mt-1 max-w-[180px] leading-tight drop-shadow-md">
+              Até 3km em pedidos acima de R$ 35,00
+            </p>
+          </div>
+        </div>
+      </div>
+
+      {/* LISTA DE PRODUTOS (ORGANIZADA POR SEÇÕES) */}
+      <div className="pt-4 px-4 pb-10">
+        {activeCategory === "TODOS" ? (
+          categories.map((cat) => {
+            const itemsInCat = menuItems.filter(
+              (i) => i.category === cat && i.available
+            );
+            if (itemsInCat.length === 0) return null;
+            return (
+              <div key={cat} className="mb-6">
+                <h3 className="text-yellow-500 font-black text-lg mb-3 border-l-4 border-yellow-500 pl-3 flex items-center tracking-wide">
+                  {cat}
+                </h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-max">
+                  {itemsInCat.map((item) => (
+                    <ItemCard key={item.id} item={item} />
+                  ))}
                 </div>
               </div>
-            </div>
-          </div>
-        ))}
-
-        {filteredMenu.length === 0 && (
-          <div className="text-center py-10 text-zinc-500 text-sm col-span-full">
-            Nenhum produto encontrado nesta categoria.
+            );
+          })
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 auto-rows-max">
+            {filteredMenu.map((item) => (
+              <ItemCard key={item.id} item={item} />
+            ))}
+            {filteredMenu.length === 0 && (
+              <div className="text-center py-10 text-zinc-500 text-sm col-span-full">
+                Nenhum produto encontrado.
+              </div>
+            )}
           </div>
         )}
       </div>
 
-      {/* BOTÃO FLUTUANTE DO CARRINHO */}
+      {/* BOTÃO FLUTUANTE */}
       {cart.length > 0 && (
         <div className="fixed bottom-6 left-6 right-6 z-50 animate-in slide-in-from-bottom-4 pointer-events-none flex justify-center">
           <button

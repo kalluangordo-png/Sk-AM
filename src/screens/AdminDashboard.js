@@ -9,11 +9,9 @@ import {
   Edit,
   Palette,
   Clock,
-  Bike,
   DollarSign,
   TrendingUp,
   ShoppingBag,
-  MessageCircle,
   Smartphone,
   Banknote,
   CreditCard,
@@ -27,11 +25,10 @@ import {
   Ticket,
   Settings,
   AlertTriangle,
-  MapPin,
-  Users,
+  QrCode,
+  Bike, // <--- O ÍCONE QUE FALTAVA ESTÁ AQUI
 } from "lucide-react";
 
-// Compressão de imagem
 const compressImage = (file, callback) => {
   const reader = new FileReader();
   reader.readAsDataURL(file);
@@ -51,7 +48,6 @@ const compressImage = (file, callback) => {
   };
 };
 
-// Timer Badge
 const OrderTimerBadge = ({ timestamp }) => {
   const [minutes, setMinutes] = useState(0);
   useEffect(() => {
@@ -86,7 +82,7 @@ export default function AdminDashboard({
   addMenuItem,
   deleteMenuItem,
   bairros,
-  setBairros, // Importante: Se não vier via prop, o saveGlobalSettings resolve
+  setBairros,
   appConfig,
   saveGlobalSettings,
   motoboys,
@@ -100,12 +96,9 @@ export default function AdminDashboard({
   const [menuSearch, setMenuSearch] = useState("");
   const [selectedCategory, setSelectedCategory] = useState("TODOS");
 
-  // --- FORMS ---
+  // Forms
   const [newBairro, setNewBairro] = useState({ nome: "", taxa: "" });
-
-  // ESTADO DO NOVO MOTOBOY
   const [newMoto, setNewMoto] = useState({ name: "", login: "" });
-
   const [newCoupon, setNewCoupon] = useState({
     code: "",
     discount: "",
@@ -135,7 +128,6 @@ export default function AdminDashboard({
   // --- METRICS ---
   const startOfDay = new Date();
   startOfDay.setHours(0, 0, 0, 0);
-
   const todayOrders = orders.filter((o) => o.timestamp >= startOfDay.getTime());
   const totalOrdersCount = todayOrders.length;
   const deliveredToday = orders
@@ -143,7 +135,6 @@ export default function AdminDashboard({
       (o) => o.status === "delivered" && o.timestamp >= startOfDay.getTime()
     )
     .sort((a, b) => b.timestamp - a.timestamp);
-
   const totalRevenue = deliveredToday.reduce((acc, o) => acc + o.total, 0);
   const avgTicket = totalOrdersCount > 0 ? totalRevenue / totalOrdersCount : 0;
 
@@ -152,7 +143,13 @@ export default function AdminDashboard({
       .filter((o) => o.payment && o.payment.includes("Pix"))
       .reduce((acc, o) => acc + o.total, 0),
     card: deliveredToday
-      .filter((o) => o.payment && o.payment.includes("Cartão"))
+      .filter(
+        (o) =>
+          o.payment &&
+          (o.payment.includes("Crédito") ||
+            o.payment.includes("Débito") ||
+            o.payment.includes("Cartão"))
+      )
       .reduce((acc, o) => acc + o.total, 0),
     cash: deliveredToday
       .filter((o) => o.payment && o.payment.includes("Dinheiro"))
@@ -163,10 +160,10 @@ export default function AdminDashboard({
   const ready = orders.filter((o) => o.status === "ready");
   const delivering = orders.filter((o) => o.status === "delivering");
 
-  // --- MENU SORTING ---
-  const sortedMenu = useMemo(() => {
-    return [...menuItems].sort((a, b) => (a.order || 0) - (b.order || 0));
-  }, [menuItems]);
+  const sortedMenu = useMemo(
+    () => [...menuItems].sort((a, b) => (a.order || 0) - (b.order || 0)),
+    [menuItems]
+  );
 
   const filteredMenu = sortedMenu.filter((i) => {
     const matchesSearch = i.name
@@ -178,26 +175,29 @@ export default function AdminDashboard({
   });
 
   const moveItem = (index, direction) => {
-    if (selectedCategory !== "TODOS" || menuSearch !== "")
-      return alert("Limpe a busca e filtros para ordenar.");
+    if (menuSearch !== "") return alert("Limpe a busca para ordenar.");
     const itemToMove = filteredMenu[index];
     const targetIndex = direction === "up" ? index - 1 : index + 1;
     if (targetIndex < 0 || targetIndex >= filteredMenu.length) return;
     const itemTarget = filteredMenu[targetIndex];
-    const order1 = itemToMove.order || Date.now();
-    const order2 = itemTarget.order || Date.now() + 1;
+    let order1 = itemToMove.order || 0;
+    let order2 = itemTarget.order || 0;
+    if (order1 === order2) order2 = order1 + 1;
     updateMenuItem(itemToMove.id, { order: order2 });
     updateMenuItem(itemTarget.id, { order: order1 });
   };
 
-  // --- ACTIONS ---
+  const handleDeleteItem = (id, name) => {
+    if (
+      window.confirm(`Tem certeza que deseja apagar "${name}" do cardápio?`)
+    ) {
+      deleteMenuItem(id);
+    }
+  };
+
   const clearSystem = () => {
-    const confirm1 = window.confirm(
-      "⚠️ PERIGO: Isso vai apagar TODOS os pedidos do histórico.\n\nTem certeza?"
-    );
-    if (confirm1) {
-      const confirm2 = window.confirm("Última chance: Apagar tudo?");
-      if (confirm2) {
+    if (confirm("⚠️ PERIGO: Apagar TODOS os pedidos?")) {
+      if (confirm("Última chance: Tem certeza?")) {
         orders.forEach((o) => deleteOrder(o.id));
         alert("Sistema zerado!");
       }
@@ -208,58 +208,40 @@ export default function AdminDashboard({
     const w = window.open("", "", "width=350,height=600");
     const fontSize = printerWidth === "58mm" ? "11px" : "14px";
     const width = printerWidth === "58mm" ? "56mm" : "78mm";
-
-    w.document.write(`
-      <html>
-        <head>
-          <title>Pedido #${order.id.split("-")[1]}</title>
-          <style>
-            body { font-family: 'Courier New', monospace; font-size: ${fontSize}; width: ${width}; margin: 0; padding: 0; color: #000; }
-            .center { text-align: center; } .bold { font-weight: bold; } .row { display: flex; justify-content: space-between; }
-            .line { border-bottom: 1px dashed #000; margin: 5px 0; } .text-lg { font-size: 1.2em; }
-            .mt { margin-top: 10px; }
-          </style>
-        </head>
-        <body>
-          <div class="center bold text-lg">${appConfig.storeName.toUpperCase()}</div>
-          <div class="center">${new Date(
-            order.timestamp
-          ).toLocaleString()}</div>
-          <div class="line"></div>
-          <div class="center bold text-lg">SENHA: ${
-            order.id.split("-")[1]
-          }</div>
-          <div class="line"></div>
-          <div class="bold">${order.customer}</div>
-          <div>${order.phone || ""}</div>
-          <div class="line"></div>
-          ${order.items
-            .map(
-              (i) =>
-                `<div class="row"><span class="bold">${i.qtd}x</span><span>${
-                  i.name
-                }</span><span>${(i.price * i.qtd).toFixed(2)}</span></div>${
-                  i.details
-                    ? `<div style="font-size:0.9em">(${i.details})</div>`
-                    : ""
-                }`
-            )
-            .join("")}
-          <div class="line"></div>
-          <div class="row"><span>Entrega:</span><span>${order.deliveryFee?.toFixed(
-            2
-          )}</span></div>
-          <div class="row bold text-lg"><span>TOTAL:</span><span>R$ ${order.total.toFixed(
-            2
-          )}</span></div>
-          <div class="line"></div>
-          <div>Pag: ${order.payment}</div>
-          <div class="bold mt">Endereço:</div>
-          <div>${order.address}</div>
-          <div class="center mt" style="font-size: 0.8em;">Sistema SK Delivery</div>
-        </body>
-      </html>
-    `);
+    w.document.write(
+      `<html><head><title>Pedido #${
+        order.id.split("-")[1]
+      }</title><style>body{font-family:'Courier New',monospace;font-size:${fontSize};width:${width};margin:0;padding:0;color:#000}.center{text-align:center}.bold{font-weight:bold}.row{display:flex;justify-content:space-between}.line{border-bottom:1px dashed #000;margin:5px 0}.text-lg{font-size:1.2em}.mt{margin-top:10px}</style></head><body><div class="center bold text-lg">${appConfig.storeName.toUpperCase()}</div><div class="center">${new Date(
+        order.timestamp
+      ).toLocaleString()}</div><div class="line"></div><div class="center bold text-lg">SENHA: ${
+        order.id.split("-")[1]
+      }</div><div class="line"></div><div class="bold">${
+        order.customer
+      }</div><div>${
+        order.phone || ""
+      }</div><div class="line"></div>${order.items
+        .map(
+          (i) =>
+            `<div class="row"><span class="bold">${i.qtd}x</span><span>${
+              i.name
+            }</span><span>${(i.price * i.qtd).toFixed(2)}</span></div>${
+              i.details
+                ? `<div style="font-size:0.9em">(${i.details})</div>`
+                : ""
+            }`
+        )
+        .join(
+          ""
+        )}<div class="line"></div><div class="row"><span>Entrega:</span><span>${order.deliveryFee?.toFixed(
+        2
+      )}</span></div><div class="row bold text-lg"><span>TOTAL:</span><span>R$ ${order.total.toFixed(
+        2
+      )}</span></div><div class="line"></div><div>Pag: ${
+        order.payment
+      }</div><div class="bold mt">Endereço:</div><div>${
+        order.address
+      }</div><div class="center mt" style="font-size:0.8em">Sistema SK Delivery</div></body></html>`
+    );
     w.print();
   };
 
@@ -289,7 +271,6 @@ export default function AdminDashboard({
       );
   };
 
-  // --- DB WRAPPERS ---
   const addBairro = () => {
     if (newBairro.nome) {
       saveGlobalSettings({
@@ -301,22 +282,17 @@ export default function AdminDashboard({
       setNewBairro({ nome: "", taxa: "" });
     }
   };
-
   const removeBairro = (n) =>
     saveGlobalSettings({ bairros: bairros.filter((b) => b.nome !== n) });
 
-  // --- FUNÇÕES MOTOBOY ---
   const addMotoboy = () => {
-    if (newMoto.name && newMoto.login) {
+    if (newMoto.name) {
       saveGlobalSettings({
         motoboys: [...motoboys, { ...newMoto, id: Date.now() }],
       });
       setNewMoto({ name: "", login: "" });
-    } else {
-      alert("Preencha Nome e Login do motoboy.");
     }
   };
-
   const removeMotoboy = (id) =>
     saveGlobalSettings({ motoboys: motoboys.filter((m) => m.id !== id) });
 
@@ -335,11 +311,9 @@ export default function AdminDashboard({
       setNewCoupon({ code: "", discount: "", type: "fixed" });
     }
   };
-
   const removeCoupon = (code) =>
     saveGlobalSettings({ coupons: coupons.filter((c) => c.code !== code) });
 
-  // --- PRODUCTS ---
   const openNewProduct = () => {
     setEditingId(null);
     setProdForm({
@@ -354,7 +328,6 @@ export default function AdminDashboard({
     });
     setShowProductForm(true);
   };
-
   const openEditProduct = (item) => {
     setEditingId(item.id);
     setProdForm({
@@ -365,7 +338,6 @@ export default function AdminDashboard({
     });
     setShowProductForm(true);
   };
-
   const handleSaveProduct = () => {
     const payload = {
       ...prodForm,
@@ -384,7 +356,6 @@ export default function AdminDashboard({
     setShowProductForm(false);
   };
 
-  // --- UI COMPONENTS ---
   const PaymentIcon = ({ payment }) => {
     if (!payment) return null;
     if (payment.includes("Pix"))
@@ -393,7 +364,7 @@ export default function AdminDashboard({
           <Smartphone size={10} /> PIX
         </span>
       );
-    if (payment.includes("Cartão"))
+    if (payment.includes("Crédito") || payment.includes("Débito"))
       return (
         <span className="text-[9px] bg-blue-900/30 text-blue-400 px-1.5 py-0.5 rounded border border-blue-500/30 flex items-center gap-1 w-fit">
           <CreditCard size={10} /> CARTÃO
@@ -489,7 +460,6 @@ export default function AdminDashboard({
           </div>
 
           <div className="flex flex-nowrap overflow-x-auto gap-4 pb-4 snap-x snap-mandatory md:grid md:grid-cols-2 lg:grid-cols-4">
-            {/* COZINHA */}
             <div className="min-w-[85vw] md:min-w-0 snap-center space-y-3">
               <div className="flex justify-between items-center border-b border-white/10 pb-3 sticky top-0 bg-zinc-950 z-10">
                 <h3 className="text-red-500 text-xs font-black uppercase flex items-center gap-2">
@@ -552,7 +522,7 @@ export default function AdminDashboard({
                         }
                         className="bg-green-500/10 text-green-500 border border-green-500/50 p-2.5 rounded-lg hover:bg-green-500/20 transition"
                       >
-                        <MessageCircle size={18} />
+                        <Settings size={18} />
                       </button>
                     )}
                     <button
@@ -565,8 +535,6 @@ export default function AdminDashboard({
                 </div>
               ))}
             </div>
-
-            {/* PRONTOS */}
             <div className="min-w-[85vw] md:min-w-0 snap-center space-y-3">
               <div className="flex justify-between items-center border-b border-white/10 pb-3 sticky top-0 bg-zinc-950 z-10">
                 <h3 className="text-yellow-500 text-xs font-black uppercase flex items-center gap-2">
@@ -585,7 +553,7 @@ export default function AdminDashboard({
                     </span>
                   </div>
                   <div className="text-xs text-zinc-500 mb-4 truncate flex items-center gap-1">
-                    <MapPin size={10} /> {o.address}
+                    <Flag size={10} /> {o.address}
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     {motoboys.map((m) => (
@@ -606,8 +574,6 @@ export default function AdminDashboard({
                 </div>
               ))}
             </div>
-
-            {/* EM ROTA */}
             <div className="min-w-[85vw] md:min-w-0 snap-center space-y-3">
               <div className="flex justify-between items-center border-b border-white/10 pb-3 sticky top-0 bg-zinc-950 z-10">
                 <h3 className="text-blue-500 text-xs font-black uppercase flex items-center gap-2">
@@ -628,8 +594,6 @@ export default function AdminDashboard({
                 </div>
               ))}
             </div>
-
-            {/* ENTREGUES */}
             <div className="min-w-[85vw] md:min-w-0 snap-center space-y-3">
               <div className="flex justify-between items-center border-b border-white/10 pb-3 sticky top-0 bg-zinc-950 z-10">
                 <h3 className="text-green-500 text-xs font-black uppercase flex items-center gap-2">
@@ -645,7 +609,7 @@ export default function AdminDashboard({
                     <div className="font-bold text-xs text-zinc-300">
                       {o.customer}
                     </div>
-                    <div className="text-[10px] text-zinc-600 flex items-center gap-1">
+                    <div className="text-10px text-zinc-600 flex items-center gap-1">
                       <CheckCircle size={8} />{" "}
                       {new Date(o.timestamp).toLocaleTimeString().slice(0, 5)}
                     </div>
@@ -723,6 +687,7 @@ export default function AdminDashboard({
                 <Plus size={18} /> NOVO
               </button>
             </div>
+
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
               {[
                 "TODOS",
@@ -851,7 +816,7 @@ export default function AdminDashboard({
                 className="bg-zinc-900 p-3 rounded-2xl border border-white/5 flex justify-between items-center group hover:border-white/20 transition"
               >
                 <div className="flex items-center gap-4 flex-1">
-                  {selectedCategory !== "TODOS" && (
+                  {menuSearch === "" && (
                     <div className="flex flex-col gap-1">
                       <button
                         onClick={() => moveItem(index, "up")}
@@ -907,7 +872,7 @@ export default function AdminDashboard({
                     <Edit size={16} />
                   </button>
                   <button
-                    onClick={() => deleteMenuItem(item.id)}
+                    onClick={() => handleDeleteItem(item.id, item.name)}
                     className="text-zinc-600 hover:text-red-500 p-2 rounded-lg transition"
                   >
                     <Trash2 size={16} />
@@ -921,58 +886,24 @@ export default function AdminDashboard({
 
       {tab === "config" && (
         <div className="space-y-6 animate-in fade-in">
-          {/* --- GESTÃO DE MOTOBOYS (NOVA SEÇÃO) --- */}
           <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
             <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-              <Users size={16} /> Equipe de Entregas (Motoboys)
+              <QrCode size={16} /> Chave Pix da Loja
             </h3>
-            <div className="space-y-2 mb-3">
-              {motoboys &&
-                motoboys.map((m) => (
-                  <div
-                    key={m.id}
-                    className="flex justify-between items-center bg-black p-2 rounded-lg border border-white/5"
-                  >
-                    <div>
-                      <span className="text-blue-400 font-black text-xs">
-                        {m.name}
-                      </span>
-                      <span className="text-zinc-500 text-[10px] ml-2">
-                        Login: {m.login}
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => removeMotoboy(m.id)}
-                      className="text-red-500 hover:text-white"
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-            </div>
-            <div className="flex gap-2">
+            <div className="space-y-2">
               <input
-                className="flex-1 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
-                placeholder="Nome (Ex: João)"
-                value={newMoto.name}
+                className="w-full bg-black p-3 rounded-lg border border-white/10 text-white text-sm"
+                placeholder="Ex: 12.345.678/0001-90 (CNPJ) ou Email"
+                value={appConfig.pixKey || ""}
                 onChange={(e) =>
-                  setNewMoto({ ...newMoto, name: e.target.value })
+                  saveGlobalSettings({
+                    config: { ...appConfig, pixKey: e.target.value },
+                  })
                 }
               />
-              <input
-                className="w-24 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
-                placeholder="Login"
-                value={newMoto.login}
-                onChange={(e) =>
-                  setNewMoto({ ...newMoto, login: e.target.value })
-                }
-              />
-              <button
-                onClick={addMotoboy}
-                className="bg-blue-600 p-3 rounded-lg text-white hover:bg-blue-500"
-              >
-                <Plus size={16} />
-              </button>
+              <p className="text-[10px] text-zinc-500">
+                Essa chave aparecerá para o cliente copiar na hora de pagar.
+              </p>
             </div>
           </div>
 
@@ -1043,61 +974,6 @@ export default function AdminDashboard({
             </div>
           </div>
 
-          {/* --- CONFIGURAÇÕES DE BAIRROS (NOVO) --- */}
-          <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
-            <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
-              <MapPin size={16} /> Taxas de Entrega
-            </h3>
-            <div className="space-y-2 mb-3 max-h-40 overflow-y-auto scrollbar-hide">
-              {bairros.map((b, idx) => (
-                <div
-                  key={idx}
-                  className="flex justify-between items-center bg-black p-2 rounded-lg border border-white/5"
-                >
-                  <div>
-                    <span className="text-white font-bold text-xs">
-                      {b.nome}
-                    </span>
-                    <span className="text-green-500 text-[10px] ml-2">
-                      R$ {b.taxa.toFixed(2)}
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => removeBairro(b.nome)}
-                    className="text-red-500 hover:text-white"
-                  >
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <input
-                className="flex-1 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
-                placeholder="Nome do Bairro"
-                value={newBairro.nome}
-                onChange={(e) =>
-                  setNewBairro({ ...newBairro, nome: e.target.value })
-                }
-              />
-              <input
-                className="w-20 bg-black p-3 rounded-lg border border-white/10 text-xs text-white"
-                type="number"
-                placeholder="R$"
-                value={newBairro.taxa}
-                onChange={(e) =>
-                  setNewBairro({ ...newBairro, taxa: e.target.value })
-                }
-              />
-              <button
-                onClick={addBairro}
-                className="bg-blue-600 p-3 rounded-lg text-white hover:bg-blue-500"
-              >
-                <Plus size={16} />
-              </button>
-            </div>
-          </div>
-
           <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
             <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
               <Settings size={16} /> Impressão
@@ -1125,7 +1001,6 @@ export default function AdminDashboard({
               </button>
             </div>
           </div>
-
           <div className="bg-zinc-900 p-4 rounded-xl border border-white/10">
             <h3 className="text-white font-bold text-sm mb-3 flex items-center gap-2">
               <Palette size={16} /> Aparência
@@ -1156,7 +1031,6 @@ export default function AdminDashboard({
               </div>
             </div>
           </div>
-
           <div className="bg-red-900/20 p-4 rounded-xl border border-red-500/30 mt-4">
             <h3 className="text-red-500 font-black text-sm mb-3 flex items-center gap-2 uppercase tracking-widest">
               <AlertTriangle size={16} /> Zona de Perigo

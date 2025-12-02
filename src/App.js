@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { Bell, Loader2, Maximize2, Monitor, Smartphone } from "lucide-react";
 
-// ... (MANTENHA SEUS IMPORTS IGUAIS AQUI) ...
+// --- IMPORTANDO CONFIGURAÇÕES ---
 import {
   db,
   auth,
@@ -13,12 +13,14 @@ import {
   INITIAL_COUPONS,
 } from "./config/firebase";
 
+// --- IMPORTANDO TELAS ---
 import LoginScreen from "./screens/LoginScreen";
 import CustomerApp from "./screens/CustomerApp";
 import AdminDashboard from "./screens/AdminDashboard";
 import MotoboyApp from "./screens/MotoboyApp";
 import KitchenDisplay from "./screens/KitchenDisplay";
 
+// --- FIREBASE IMPORTS ---
 import {
   collection,
   addDoc,
@@ -41,28 +43,35 @@ export default function App() {
   const [userAuth, setUserAuth] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // ... (MANTENHA TODOS OS SEUS ESTADOS E USE EFFECTS IGUAIS) ...
-  // (Vou pular a repetição do código de lógica para focar no RETURN que é onde está o erro visual)
-
+  // --- ESTADOS GLOBAIS ---
   const [orders, setOrders] = useState([]);
   const [menuItems, setMenuItems] = useState(INITIAL_MENU);
   const [bairros, setBairros] = useState(INITIAL_BAIRROS);
-  const [appConfig, setAppConfig] = useState(INITIAL_CONFIG);
+
+  // FORÇANDO O NOME "BURGERS" NA INICIALIZAÇÃO
+  const [appConfig, setAppConfig] = useState({
+    ...INITIAL_CONFIG,
+    storeName: "Burgers",
+  });
+
   const [motoboys, setMotoboys] = useState(INITIAL_MOTOBOYS);
   const [coupons, setCoupons] = useState(INITIAL_COUPONS);
 
   const [myOrderIds, setMyOrderIds] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("sk_my_order_ids_v3")) || [];
+      // ATUALIZADO PARA V4 PARA LIMPAR CACHE ANTIGO DE PEDIDOS
+      return JSON.parse(localStorage.getItem("sk_my_order_ids_v4")) || [];
     } catch {
       return [];
     }
   });
 
+  // --- ORDENAÇÃO GLOBAL ---
   const sortedMenuItems = useMemo(() => {
     return [...menuItems].sort((a, b) => (a.order || 0) - (b.order || 0));
   }, [menuItems]);
 
+  // --- AUTENTICAÇÃO ---
   useEffect(() => {
     if (!auth) {
       setIsLoading(false);
@@ -80,9 +89,11 @@ export default function App() {
     return () => unsubAuth();
   }, []);
 
+  // --- SINCRONIZAÇÃO ---
   useEffect(() => {
     if (!db || !userAuth) {
-      const localMenu = localStorage.getItem("sk_menu_v11");
+      // --- CORREÇÃO DE CACHE AQUI: Mudamos de v11 para v13 ---
+      const localMenu = localStorage.getItem("sk_menu_v13");
       if (localMenu) setMenuItems(JSON.parse(localMenu));
       return;
     }
@@ -111,7 +122,8 @@ export default function App() {
         if (!snap.empty) {
           const data = snap.docs.map((d) => ({ ...d.data(), id: d.id }));
           setMenuItems(data);
-          localStorage.setItem("sk_menu_v11", JSON.stringify(data));
+          // --- CORREÇÃO DE CACHE AQUI TAMBÉM: Salva como v13 ---
+          localStorage.setItem("sk_menu_v13", JSON.stringify(data));
         } else if (isOnline) {
           INITIAL_MENU.forEach((i) =>
             addDoc(
@@ -138,7 +150,15 @@ export default function App() {
         if (snap.exists()) {
           const data = snap.data();
           if (data.bairros) setBairros(data.bairros);
-          if (data.config) setAppConfig({ ...INITIAL_CONFIG, ...data.config });
+
+          if (data.config) {
+            setAppConfig({
+              ...INITIAL_CONFIG,
+              ...data.config,
+              storeName: "Burgers",
+            });
+          }
+
           if (data.motoboys) setMotoboys(data.motoboys);
           if (data.coupons) setCoupons(data.coupons);
         } else if (isOnline) {
@@ -154,7 +174,7 @@ export default function App() {
             ),
             {
               bairros: INITIAL_BAIRROS,
-              config: INITIAL_CONFIG,
+              config: { ...INITIAL_CONFIG, storeName: "Burgers" },
               motoboys: INITIAL_MOTOBOYS,
               coupons: INITIAL_COUPONS,
             }
@@ -171,7 +191,8 @@ export default function App() {
   }, [userAuth]);
 
   useEffect(() => {
-    localStorage.setItem("sk_my_order_ids_v3", JSON.stringify(myOrderIds));
+    // ATUALIZADO PARA V4
+    localStorage.setItem("sk_my_order_ids_v4", JSON.stringify(myOrderIds));
   }, [myOrderIds]);
 
   const showToast = useCallback((msg, type = "success") => {
@@ -384,24 +405,21 @@ export default function App() {
     );
   }
 
-  // --- LÓGICA DE LAYOUT RESPONSIVO ---
-  // Apenas Admin e Cozinha expandem. Cliente mantem estilo app no PC.
-  const isWideView = view === "admin" || view === "kitchen";
+  // --- LÓGICA DE LAYOUT INTELIGENTE ---
+  const isWideView =
+    view === "admin" || view === "kitchen" || view === "customer";
 
   return (
-    // CONTAINER GERAL
     <div className="bg-zinc-900 w-full min-h-screen flex justify-center sm:items-center sm:py-8 font-sans selection:bg-yellow-500 selection:text-black overflow-hidden">
-      {/* Decoração apenas para PC Grande */}
       <div className="hidden xl:flex fixed bottom-8 left-8 flex-col gap-2 text-zinc-700 pointer-events-none">
         <div className="flex items-center gap-2">
           {isWideView ? <Monitor size={20} /> : <Smartphone size={20} />}
           <span className="font-bold text-xs tracking-widest uppercase">
-            Modo: {isWideView ? "Gestão Desktop" : "Aplicativo Mobile"}
+            Modo: {isWideView ? "Desktop Expandido" : "Mobile"}
           </span>
         </div>
       </div>
 
-      {/* A "TELA" DO SISTEMA */}
       <div
         className={`
           relative bg-zinc-950 flex flex-col shadow-2xl transition-all duration-700 ease-in-out
@@ -414,12 +432,11 @@ export default function App() {
           
           ${
             isWideView
-              ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl" // Admin: Quase tela toda
-              : "sm:w-full sm:max-w-[420px]" // Cliente: Tamanho de Celular
+              ? "sm:w-[95vw] sm:max-w-[1400px] sm:rounded-3xl"
+              : "sm:w-full sm:max-w-[420px]"
           }
         `}
       >
-        {/* Ilha Dinâmica (Só aparece no PC) */}
         <div className="hidden sm:flex absolute top-0 left-0 right-0 justify-center pt-2 z-50 pointer-events-none">
           <div className="w-24 h-6 bg-zinc-800 rounded-b-xl flex items-center justify-center gap-2">
             <div className="w-10 h-1 bg-zinc-900 rounded-full opacity-50"></div>
@@ -427,16 +444,14 @@ export default function App() {
           </div>
         </div>
 
-        {/* Faixa de Status (Fixo no topo) */}
         <div
           style={themeStyle}
           className="shrink-0 text-black text-[9px] font-bold text-center py-1 z-[60] shadow-md flex justify-center items-center gap-2"
         >
-          <span>SK SYSTEM V12.9</span>
+          <span>SYSTEM V13.0</span>
           {isWideView && <Maximize2 size={8} />}
         </div>
 
-        {/* Notificações (Toasts) */}
         <div className="absolute top-12 left-0 right-0 flex flex-col items-center pointer-events-none z-[70] px-4 space-y-2">
           {toasts.map((t) => (
             <div
@@ -458,12 +473,8 @@ export default function App() {
           ))}
         </div>
 
-        {/* --- AQUI ESTÁ A CORREÇÃO DO SCROLL --- */}
-        {/* Usamos 'flex-1' para ocupar o espaço restante e 'overflow-y-auto' AQUI, não no pai */}
         <div className="flex-1 w-full overflow-y-auto scroll-smooth relative bg-zinc-950 scrollbar-hide">
           <div className="min-h-full pb-20">
-            {" "}
-            {/* Padding bottom extra para garantir que o fim da página apareça */}
             {view === "login" && (
               <LoginScreen
                 setView={setView}
